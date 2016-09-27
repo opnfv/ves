@@ -1,0 +1,20 @@
+Project: VNF Event Stream (VES)
+Project Creation Date: May 31, 2016
+Project Category:
+Lifecycle State: Incubation
+Project Lead: ag1367@att.com
+Primary Contact: ag1367@att.com
+Jira Name: VNF Event Stream
+Jira Prefix: [VES]
+Mailing list tag: [ves]
+Repo: ves
+
+Committers:
+ag1367@att.com
+bs3131@att.com
+bryan.sullivan@att.com
+feng.liu1@huawei.com
+li.yuanzhen@zte.com.cn
+
+Link to TSC approval: https://wiki.opnfv.org/wiki/tsc#february_16_2016
+Link to approval of additional submitters:
