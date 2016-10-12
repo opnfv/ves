@@ -223,11 +223,6 @@ cd /home/ubuntu/
 git clone https://github.com/att/evel-test-collector.git
 sed -i -- 's/vel_username = /vel_username = hello/' evel-test-collector/config/collector.conf
 sed -i -- 's/vel_password = /vel_password = world/' evel-test-collector/config/collector.conf
-nohup python evel-test-collector/code/collector/collector.py \
-       --config evel-test-collector/config/collector.conf \
-       --section default \
-       --verbose > ~/collector.log &
-exit
 EOF
 
   echo "$0: start vHello web server in VDU1"

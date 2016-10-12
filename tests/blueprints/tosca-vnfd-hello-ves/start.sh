@@ -24,6 +24,33 @@
 #   ID: username:password to use in REST
 #
 
+setup_agent () {
+  echo "$0: Install prerequisites"
+  sudo apt-get install -y gcc
+  # NOTE: force is required as some packages can't be authenticated...
+  sudo apt-get install -y --force-yes libcurl4-openssl-dev
+  sudo apt-get install -y make
+
+  echo "$0: Clone agent library"
+  cd /home/ubuntu
+  git clone https://github.com/att/evel-library.git
+
+  echo "$0: Build agent demo"
+  sed -i -- '/api_secure,/{n;s/.*/                      "hello",/}' evel-library/code/evel_demo/evel_demo.c
+  sed -i -- '/"hello",/{n;s/.*/                      "world",/}' evel-library/code/evel_demo/evel_demo.c
+
+  echo "$0: Build agent demo"
+  cd evel-library/bldjobs
+  make
+  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/ubuntu/evel-library/libs/x86_64
+  
+  echo "$0: Start agent demo, repeat every minute"
+  crontab -l > /tmp/cron
+  echo "* * * * 1-5 /home/ubuntu/evel-library/output/x86_64/evel_demo --fqdn $COL_IP --port 30000 -v" >> /tmp/cron
+  crontab /tmp/cron
+  rm /tmp/cron
+}
+
 echo "$0: Setup website and dockerfile"
 mkdir ~/www
 mkdir ~/www/html
@@ -76,9 +103,4 @@ echo "$0: setup VES event delivery for the nginx server"
 export COL_IP=$1
 export COL_ID=$2
 
-while true 
-do
-  sleep 30
-  curl --user $COL_ID -H "Content-Type: application/json" -X POST -d '{ "event": { "commonEventHeader": { "domain": "fault", "eventType": "Fault_MobileCallRecording_PilotNumberPoolExhaustion", "eventId": "ab305d54-85b4-a31b-7db2-fb6b9e546015", "sequence": "0", "priority": "High", "sourceId": "de305d54-75b4-431b-adb2-eb6b9e546014", "sourceName": "EricssonECE", "functionalRole": "SCF", "startEpochMicrosec": "1413378172000000", "lastEpochMicrosec": "1413378172000000", "reportingEntityId": "de305d54-75b4-431b-adb2-eb6b9e546014", "reportingEntityName": "EricssonECE" }, "faultFields": { "alarmCondition": "PilotNumberPoolExhaustion", "eventSourceType": "other(0)", "specificProblem": "Calls cannot complete because pilot numbers are unavailable", "eventSeverity": "CRITICAL", "vfStatus": "Active" } } }' http://$COL_IP:30000/eventListener/v1
-done
-
+setup_agent
