@@ -1,0 +1,107 @@
+tosca_definitions_version: tosca_simple_profile_for_nfv_1_0_0
+
+description: Hello VES
+
+metadata:
+  template_name: tosca-vnfd-hello-ves
+
+topology_template:
+  node_templates:
+    VDU1:
+      type: tosca.nodes.nfv.VDU.Tacker
+      capabilities:
+        nfv_compute:
+          properties:
+            num_cpus: 1
+            mem_size: 1024 MB
+            disk_size: 4 GB
+      properties:
+        image: models-xenial-server
+        availability_zone: nova
+        mgmt_driver: noop
+        config: |
+          param0: key1
+          param1: key2
+
+    CP1:
+      type: tosca.nodes.nfv.CP.Tacker
+      properties:
+        management: true
+        anti_spoofing_protection: false
+      requirements:
+        - virtualLink:
+            node: VL1
+        - virtualBinding:
+            node: VDU1
+
+    CP2:
+      type: tosca.nodes.nfv.CP.Tacker
+      properties:
+        anti_spoofing_protection: false
+      requirements:
+        - virtualLink:
+            node: VL2
+        - virtualBinding:
+            node: VDU1
+
+    VL1:
+      type: tosca.nodes.nfv.VL
+      properties:
+        network_name: vnf_mgmt
+        vendor: Tacker
+
+    VL2:
+      type: tosca.nodes.nfv.VL
+      properties:
+        network_name: vnf_private
+        vendor: Tacker
+
+    VDU2:
+      type: tosca.nodes.nfv.VDU.Tacker
+      capabilities:
+        nfv_compute:
+          properties:
+            num_cpus: 1
+            mem_size: 1024 MB
+            disk_size: 4 GB
+      properties:
+        image: models-xenial-server
+        availability_zone: nova
+        mgmt_driver: noop
+        config: |
+          param0: key1
+          param1: key2
+
+    CP3:
+      type: tosca.nodes.nfv.CP.Tacker
+      properties:
+        management: true
+        anti_spoofing_protection: false
+      requirements:
+        - virtualLink:
+            node: VL3
+        - virtualBinding:
+            node: VDU2
+
+    CP4:
+      type: tosca.nodes.nfv.CP.Tacker
+      properties:
+        anti_spoofing_protection: false
+      requirements:
+        - virtualLink:
+            node: VL4
+        - virtualBinding:
+            node: VDU2
+
+    VL3:
+      type: tosca.nodes.nfv.VL
+      properties:
+        network_name: vnf_mgmt
+        vendor: Tacker
+
+    VL4:
+      type: tosca.nodes.nfv.VL
+      properties:
+        network_name: vnf_private
+        vendor: Tacker
+
