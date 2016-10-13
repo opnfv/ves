@@ -252,6 +252,9 @@ collector () {
   VDU2_IP=$(openstack server show $VDU2_ID | awk "/ addresses / { print \$6 }")
   VDU2_URL="http://$VUD2_IP:30000"
 
+  echo "$0: Stop the VES Collector in VDU2 if running"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU2_IP "sudo kill $(ps -ef | grep evel-test-collector | awk '{print $2}')"
+
   echo "$0: Start the VES Collector in VDU2"
   ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU2_IP << EOF
 cd /home/ubuntu/
