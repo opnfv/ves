@@ -29,8 +29,6 @@
 #   clean: cleanup after test
 #   collector: attach to the collector VM and run the collector
 
-set -x
-
 trap 'fail' ERR
 
 pass() {
@@ -228,7 +226,7 @@ EOF
   echo "$0: start vHello web server in VDU1"
   ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU1_IP "sudo chown ubuntu /home/ubuntu"
   scp -i /tmp/tacker/vHello.pem -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/start.sh ubuntu@$VDU1_IP:/home/ubuntu/start.sh
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU1_IP "bash /home/ubuntu/start.sh $VDU2_IP hello:world"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU1_IP "bash /home/ubuntu/start.sh $VDU1_ID $VDU2_IP hello world"
 
   echo "$0: verify vHello server is running"
   apt-get install -y curl
@@ -247,22 +245,32 @@ collector () {
   source /tmp/tacker/admin-openrc.sh
 
   echo "$0: find Collector VM IP"
-  HEAT_ID=$(tacker vnf-show hello-ves | awk "/instance_id/ { print \$4 }")
-  VDU2_ID=$(openstack stack resource list $HEAT_ID | awk "/VDU2 / { print \$4 }")
-  VDU2_IP=$(openstack server show $VDU2_ID | awk "/ addresses / { print \$6 }")
-  VDU2_URL="http://$VUD2_IP:30000"
+  VDU2_IP=$(openstack server list | awk "/VDU2/ { print \$10 }")
 
-  echo "$0: Stop the VES Collector in VDU2 if running"
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU2_IP "sudo kill $(ps -ef | grep evel-test-collector | awk '{print $2}')"
-
-  echo "$0: Start the VES Collector in VDU2"
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU2_IP << EOF
+  echo "$0: Start the VES Collector in VDU2 - Stop first if running"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU2_IP << 'EOF'
+sudo kill $(ps -ef | grep evel-test-collector | awk '{print $2}')
 cd /home/ubuntu/
 python evel-test-collector/code/collector/collector.py \
        --config evel-test-collector/config/collector.conf \
        --section default \
        --verbose
 EOF
+}
+
+traffic () {
+  echo "$0: setup OpenStack CLI environment"
+  source /tmp/tacker/admin-openrc.sh
+
+  echo "$0: find Agent VM IP"
+  VDU1_IP=$(openstack server list | awk "/VDU1/ { print \$10 }")
+
+  echo "$0: Generate some traffic, somewhat randomly"
+  while true
+  do
+    sleep .0$[ ( $RANDOM % 10 ) + 1 ]s
+    curl -s http://$VDU1_IP > /dev/null
+  done
 }
 
 stop() {
@@ -296,12 +304,16 @@ case "$1" in
     forward_to_container start
     pass
     ;;
-  start|stop|collector)
+  start|stop)
     if [[ $# -eq 1 ]]; then forward_to_container $1
     else
       # running inside the tacker container, ready to go
       $1
     fi
+    pass
+    ;;
+  collector|traffic)
+    $1
     pass
     ;;
   clean)

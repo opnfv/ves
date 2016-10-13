@@ -19,10 +19,11 @@
 # Status: this is a work in progress, under test.
 #
 # How to use:
-# $ bash start.sh IP ID
-#   IP: IP address of the collector
+# $ bash start.sh ID IP username password
 #   ID: username:password to use in REST
-#
+#   IP: IP address of the collector
+#   username: Username for Collector RESTful API authentication
+#   password: Password for Collector RESTful API authentication
 
 setup_agent () {
   echo "$0: Install prerequisites"
@@ -36,19 +37,21 @@ setup_agent () {
   git clone https://github.com/att/evel-library.git
 
   echo "$0: Build agent demo"
-  sed -i -- '/api_secure,/{n;s/.*/                      "hello",/}' evel-library/code/evel_demo/evel_demo.c
-  sed -i -- '/"hello",/{n;s/.*/                      "world",/}' evel-library/code/evel_demo/evel_demo.c
+  sed -i -- "/api_secure,/{n;s/.*/                      \"$username\",/}" evel-library/code/evel_demo/evel_demo.c
+  sed -i -- "/\"hello\",/{n;s/.*/                      \"$password\",/}" evel-library/code/evel_demo/evel_demo.c
 
   echo "$0: Build agent demo"
   cd evel-library/bldjobs
   make
   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/ubuntu/evel-library/libs/x86_64
   
-  echo "$0: Start agent demo, repeat every minute"
-  crontab -l > /tmp/cron
-  echo "* * * * 1-5 /home/ubuntu/evel-library/output/x86_64/evel_demo --fqdn $COL_IP --port 30000 -v" >> /tmp/cron
-  crontab /tmp/cron
-  rm /tmp/cron
+  nohup ..output/x86_64/evel_demo --id $agent_id --fqdn $collector_ip --port 30000 --username $username --password $password &
+
+#  echo "$0: Start agent demo, repeat every minute"
+#  crontab -l > /tmp/cron
+#  echo "* * * * 1-5 /home/ubuntu/evel-library/output/x86_64/evel_demo --id $agent_id --fqdn $collector_ip --port 30000 --username $username --password $password" >> /tmp/cron
+#  crontab /tmp/cron
+#  rm /tmp/cron
 }
 
 echo "$0: Setup website and dockerfile"
@@ -100,7 +103,9 @@ echo "$0: setup VES event delivery for the nginx server"
 # id=$(sudo ls /var/lib/docker/containers)
 # sudo tail -f /var/lib/docker/containers/$id/$id-json.log 
 
-export COL_IP=$1
-export COL_ID=$2
+agent_id=$1
+collector_ip=$2
+username=$3
+password=$4
 
 setup_agent

@@ -26,6 +26,7 @@
 #include <sys/signal.h>
 #include <pthread.h>
 #include <mcheck.h>
+#include <time.h> 
 
 #include "evel.h"
 #include "evel_demo.h"
@@ -37,6 +38,7 @@
  *****************************************************************************/
 static const struct option long_options[] = {
     {"help",     no_argument,       0, 'h'},
+    {"id",       required_argument, 0, 'i'},
     {"fqdn",     required_argument, 0, 'f'},
     {"port",     required_argument, 0, 'n'},
     {"username", required_argument, 0, 'u'},
@@ -48,24 +50,27 @@ static const struct option long_options[] = {
 /**************************************************************************//**
  * Definition of short options to the program.
  *****************************************************************************/
-static const char* short_options = "hf:n:p:t:sc:";
+static const char* short_options = "h:i:f:n:u:p:v:";
 
 /**************************************************************************//**
  * Basic user help text describing the usage of the application.
  *****************************************************************************/
 static const char* usage_text =
 "evel_demo [--help]\n"
+"          --id <Agent host ID>\n"
 "          --fqdn <domain>\n"
 "          --port <port_number>\n"
 "          --username <username>\n"
 "          --password <password>\n"
-"          --vmid <VM ID>\n"
 "          [--verbose]\n"
 "\n"
 "Agent for the OPNFV VNF Event Stream (VES) vHello_VES test.\n"
 "\n"
 "  -h         Display this usage message.\n"
 "  --help\n"
+"\n"
+"  -i         The ID of the agent host.\n"
+"  --id\n"
 "\n"
 "  -f         The FQDN or IP address to the RESTful API.\n"
 "  --fqdn\n"
@@ -78,9 +83,6 @@ static const char* usage_text =
 "\n"
 "  -p         Password for authentication to the RESTful API.\n"
 "  --password\n"
-"\n"
-"  -i         UUID of the agent host VM.\n"
-"  --vmid\n"
 "\n"
 "  -v         Generate much chattier logs.\n"
 "  --verbose\n";
@@ -127,20 +129,20 @@ void report_app_statechange(char *change)
       EVEL_ERROR("Post failed %d (%s)", evel_rc, evel_error_string());
     }
     else {
-       EVEL_ERROR("New fault failed");
+       EVEL_ERROR("Unable to send new fault report");
     }
   }
 }
 
 /**************************************************************************//**
- * Check status of the nginx container.
+ * Check status of the app container.
  *
  * Checks and reports any change in app state. 
  *
  * param[in]  none
  *****************************************************************************/
-void check_nginx_contaner_state() {
-  printf("Checking status of nginx container\n");
+void check_app_container_state() {
+  printf("Checking status of app container\n");
   FILE *fp;
   int status;
   const int JSON_MAX = 1000;
@@ -177,6 +179,92 @@ void check_nginx_contaner_state() {
 }
 
 /**************************************************************************//**
+ * Measure app traffic
+ *
+ * Reports transactions per second in the last second.
+ *
+ * param[in]  none
+ *****************************************************************************/
+void measure_traffic() {
+
+  printf("Checking app traffic\n");
+  EVENT_FAULT * fault = NULL;
+  EVEL_ERR_CODES evel_rc = EVEL_SUCCESS;
+  EVENT_MEASUREMENT * measurement = NULL;
+  FILE *fp;
+  int status;
+  char count[10];
+  time_t rawtime;
+  struct tm * timeinfo;
+  char period [9];
+  char cmd [100];
+  int concurrent_sessions = 0;
+  int configured_entities = 0;
+  double mean_request_latency = 0;
+  double measurement_interval = 1;
+  double memory_configured = 0;
+  double memory_used = 0;
+  int request_rate;
+
+  time (&rawtime);
+  timeinfo = localtime (&rawtime);
+  strftime (period,9,"%H:%M:$S",timeinfo);
+
+  strcpy(cmd, "sudo docker logs vHello | grep -c ");
+  strncat(cmd, period, 100);
+
+  fp = popen(cmd, "r");
+  if (fp == NULL) {
+    EVEL_ERROR("popen failed to execute command");
+  }
+
+  if (fgets(count, 10, fp) != NULL) {
+    request_rate = atoi(count);
+    measurement = evel_new_measurement(concurrent_sessions, 
+      configured_entities, mean_request_latency, measurement_interval,
+      memory_configured, memory_used, request_rate);
+
+    if (measurement != NULL) {
+      evel_measurement_type_set(measurement, "HTTP request rate");
+      evel_measurement_agg_cpu_use_set(measurement, 8.8);
+      evel_measurement_cpu_use_add(measurement, "cpu1", 11.11);
+      evel_measurement_cpu_use_add(measurement, "cpu2", 22.22);
+      evel_measurement_fsys_use_add(measurement,"00-11-22",100.11, 100.22, 33,
+                                                           200.11, 200.22, 44);
+      evel_measurement_fsys_use_add(measurement,"33-44-55",300.11, 300.22, 55,
+                                                           400.11, 400.22, 66);
+
+      evel_measurement_latency_add(measurement, 0.0, 10.0, 20);
+      evel_measurement_latency_add(measurement, 10.0, 20.0, 30);
+
+      evel_measurement_vnic_use_add(measurement, "eth0", 1, 2,
+                                                         3, 4,
+                                                         5, 6,
+                                                         7, 8);
+      evel_measurement_vnic_use_add(measurement, "eth1", 11, 12,
+                                                         13, 14,
+                                                         15, 16,
+                                                         17, 18);
+
+      evel_rc = evel_post_event((EVENT_HEADER *)measurement);
+      if (evel_rc != EVEL_SUCCESS) {
+        EVEL_ERROR("Post Measurement failed %d (%s)",
+                    evel_rc,
+                    evel_error_string());
+      }
+    }
+    else {
+      EVEL_ERROR("New Measurement failed");
+    }
+    printf("Processed measurement\n");
+  }
+  status = pclose(fp);
+  if (status == -1) {
+    EVEL_ERROR("pclose returned an error");
+  }
+}
+
+/**************************************************************************//**
  * Main function.
  *
  * Parses the command-line then ...
@@ -190,11 +278,11 @@ int main(int argc, char ** argv)
   pthread_t thread_id;
   int option_index = 0;
   int param = 0;
+  char * api_vmid = NULL;
   char * api_fqdn = NULL;
   int api_port = 0;
   char * api_username = NULL;
   char * api_password = NULL;
-  char * api_vmid = NULL;
   char * api_path = NULL;
   char * api_topic = NULL;
   int api_secure = 0;
@@ -228,6 +316,10 @@ int main(int argc, char ** argv)
         exit(0);
         break;
 
+      case 'i':
+        api_vmid = optarg;
+        break;
+
       case 'f':
         api_fqdn = optarg;
         break;
@@ -242,10 +334,6 @@ int main(int argc, char ** argv)
 
       case 'p':
         api_password = optarg;
-        break;
-
-      case 'i':
-        api_vmid = optarg;
         break;
 
       case 'v':
@@ -360,7 +448,8 @@ int main(int argc, char ** argv)
       EVEL_ERROR("New heartbeat failed");
     }
 
-    check_nginx_contaner_state();
+    check_app_container_state();
+    measure_traffic();
 
     /*************************************************************************/
     /* MAIN RETRY LOOP.  Loop every 10 secs.                                 */

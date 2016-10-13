@@ -31,8 +31,11 @@
 
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
 
+mkdir $1
+
+echo "$0: Setup admin-openrc.sh"
+
 if [ "$dist" == "Ubuntu" ]; then
-  # Ubuntu: assumes JOID-based install, and that this script is being run on the jumphost.
   echo "$0: Ubuntu-based install"
   echo "$0: Create the environment file"
   KEYSTONE_HOST=$(juju status --format=short | awk "/keystone\/0/ { print \$3 }")
@@ -45,7 +48,7 @@ export CINDER_HOST=$(juju status --format=short | awk "/cinder\/0/ { print \$3 }
 export GLANCE_HOST=$(juju status --format=short | awk "/glance\/0/ { print \$3 }")
 export NEUTRON_HOST=$(juju status --format=short | awk "/neutron-api\/0/ { print \$3 }")
 export NOVA_HOST=$(juju status --format=short | awk "/nova-cloud-controller\/0/ { print \$3 }")
-export JUMPHOST=$(ifconfig brAdm | awk "/inet addr/ { print \$2 }" | sed 's/addr://g')
+export HEAT_HOST=$(juju status --format=short | awk "/heat\/0/ { print \$3 }")
 export OS_USERNAME=admin
 export OS_PASSWORD=openstack
 export OS_TENANT_NAME=admin
@@ -53,7 +56,7 @@ export OS_AUTH_URL=http://$KEYSTONE_HOST:5000/v2.0
 export OS_REGION_NAME=RegionOne
 EOF
 else
-  # Centos: assumes Apex-based install, and that this script is being run on the Undercloud controller VM.
+  # Centos
   echo "$0: Centos-based install"
   echo "$0: Setup undercloud environment so we can get overcloud Controller server address"
   source ~/stackrc
@@ -61,7 +64,6 @@ else
   export CONTROLLER_HOST1=$(openstack server list | awk "/overcloud-controller-0/ { print \$8 }" | sed 's/ctlplane=//g')
   echo "$0: Create the environment file"
   cat <<EOF >$1/admin-openrc.sh
-export HORIZON_HOST=$CONTROLLER_HOST1
 export CONGRESS_HOST=$CONTROLLER_HOST1
 export KEYSTONE_HOST=$CONTROLLER_HOST1
 export CEILOMETER_HOST=$CONTROLLER_HOST1
@@ -69,13 +71,13 @@ export CINDER_HOST=$CONTROLLER_HOST1
 export GLANCE_HOST=$CONTROLLER_HOST1
 export NEUTRON_HOST=$CONTROLLER_HOST1
 export NOVA_HOST=$CONTROLLER_HOST1
-export JUMPHOST=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
+export HEAT_HOST=$CONTROLLER_HOST1
 EOF
   cat ~/overcloudrc >>$1/admin-openrc.sh
   source ~/overcloudrc
   export OS_REGION_NAME=$(openstack endpoint list | awk "/ nova / { print \$4 }")
   # sed command below is a workaound for a bug - region shows up twice for some reason
-  cat <<EOF | sed '$d' $1/admin-openrc.sh
+  cat <<EOF | sed '$d' >>$1/admin-openrc.sh
 export OS_REGION_NAME=$OS_REGION_NAME
 EOF
 fi
