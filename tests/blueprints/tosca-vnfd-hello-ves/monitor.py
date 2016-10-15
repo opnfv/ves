@@ -29,13 +29,20 @@ with open('/home/ubuntu/ves.log') as f:
   while True:
     line = f.readline()
     if line:
-#      print line,
+#        print "line: ", line,
 
       if "lastEpochMicrosec" in line:
-#....5....1....5....2....5....3....5
+#0....5....1....5....2....5....3....5....4....5....5
 #            "lastEpochMicrosec": 1476552393091008,
-        report_time = line[34:-2]
-        report_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(1347517370))
+# Note: the above is expected, but sometimes it's in a different position or
+# corrupted with other output for some reason...
+
+        fields = line.split( )
+        e = fields[1][0:-1]
+        if e.isdigit():
+#          print "report_time: ", e, "\n"
+          report_time = time.strftime('%Y-%m-%d %H:%M:%S', 
+            time.localtime(int(e)/1000000))
 
       if "requestRate" in line:
 #....5....1....5....2....5....3....5
