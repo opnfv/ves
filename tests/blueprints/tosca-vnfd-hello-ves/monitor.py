@@ -19,19 +19,36 @@
 #
 # Status: this is a work in progress, under test.
 
+import time
+
+report_time = ""
+request_rate = ""
+app_state = ""
+
 with open('/home/ubuntu/ves.log') as f:
   while True:
     line = f.readline()
     if line:
 #      print line,
+
+      if "lastEpochMicrosec" in line:
+#....5....1....5....2....5....3....5
+#            "lastEpochMicrosec": 1476552393091008,
+        report_time = line[34:-2]
+        report_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(1347517370))
+
       if "requestRate" in line:
-#       print line,
-        rate = line[27:-2]
-        print 'request rate: {0}'.format(rate)
 #....5....1....5....2....5....3....5
 #            "requestRate": 2264,
+        request_rate = line[27:-2]
+        print '{0} app state: {1}\trequest rate: {2}'.format(
+          report_time, app_state, request_rate)
+
       if "\"specificProblem\": \"Started\"" in line:
-        print 'app state change: Started'
+        app_state = "Started"
+        print '{0} app state change: Started'.format(report_time)
+
       if "\"specificProblem\": \"Stopped\"" in line:
-        print 'app state change: Stopped'
+        app_state = "Stopped"
+        print '{0} app state change: Stopped'.format(report_time)
 
