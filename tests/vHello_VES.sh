@@ -254,10 +254,10 @@ collector () {
   ssh -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU2_IP << 'EOF'
 sudo kill $(ps -ef | grep evel-test-collector | awk '{print $2}')
 cd /home/ubuntu/
-python evel-test-collector/code/collector/collector.py \
+nohup python evel-test-collector/code/collector/collector.py \
        --config evel-test-collector/config/collector.conf \
        --section default \
-       --verbose >~/ves.log
+       --verbose >~/ves.log &
 EOF
 }
 

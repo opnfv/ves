@@ -36,7 +36,13 @@ setup_agent () {
   cd /home/ubuntu
   git clone https://github.com/att/evel-library.git
 
-  echo "$0: Build agent demo"
+  echo "$0: Clone VES repo"
+  git clone https://gerrit.opnfv.org/gerrit/ves
+
+  echo "$0: Use vHello_VES blueprint version of agent_demo.c"
+  cp ves/tests/blueprints/tosca-vnfd-hello-ves/evel_demo.c evel-library/code/evel_demo/evel_demo.c
+  
+  echo "$0: Update parameters and build agent demo"
   sed -i -- "/api_secure,/{n;s/.*/                      \"$username\",/}" evel-library/code/evel_demo/evel_demo.c
   sed -i -- "/\"hello\",/{n;s/.*/                      \"$password\",/}" evel-library/code/evel_demo/evel_demo.c
 
@@ -45,7 +51,7 @@ setup_agent () {
   make
   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/ubuntu/evel-library/libs/x86_64
   
-  nohup ..output/x86_64/evel_demo --id $agent_id --fqdn $collector_ip --port 30000 --username $username --password $password &
+  nohup ../output/x86_64/evel_demo --id $agent_id --fqdn $collector_ip --port 30000 --username $username --password $password &
 
 #  echo "$0: Start agent demo, repeat every minute"
 #  crontab -l > /tmp/cron
@@ -79,6 +85,8 @@ Hello World!<br>
 <a href="http://wiki.opnfv.org"><img src="https://www.opnfv.org/sites/all/themes/opnfv/logo.png"></a>
 </body></html>
 EOM
+
+cp ~/ves/tests/blueprints/tosca-vnfd-hello-ves/favicon.ico ~/www/html/favicon.ico
 
 echo "$0: Install docker"
 # Per https://docs.docker.com/engine/installation/linux/ubuntulinux/

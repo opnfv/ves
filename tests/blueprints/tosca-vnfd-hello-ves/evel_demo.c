@@ -211,7 +211,7 @@ void measure_traffic() {
   time (&rawtime);
   timeinfo = localtime (&rawtime);
   strftime(period,7,"%H:%M:",timeinfo);
-  strftime(secs,2,"%S",timeinfo);
+  strftime(secs,3,"%S",timeinfo);
   sec = atoi(secs);
   if (sec == 0) sec = 59;
   sprintf(secs, "%02d", sec);
@@ -228,6 +228,7 @@ void measure_traffic() {
 
   if (fgets(count, 10, fp) != NULL) {
     request_rate = atoi(count);
+    printf("Reporting request rate for second: %s as %d\n", period, request_rate);
     measurement = evel_new_measurement(concurrent_sessions, 
       configured_entities, mean_request_latency, measurement_interval,
       memory_configured, memory_used, request_rate);
