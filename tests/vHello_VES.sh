@@ -21,13 +21,19 @@
 # How to use:
 #   $ git clone https://gerrit.opnfv.org/gerrit/ves
 #   $ cd ves/tests
-#   $ bash vHello_VES.sh [setup|start|run|stop|clean|collector]
+#   $ bash vHello_VES.sh [setup|start|run|test|stop|clean] 
+#        [collector|traffic|pause|nic]
 #   setup: setup test environment
 #   start: install blueprint and run test
 #   run: setup test environment and run test
+#   test: run test tools/scenario - see below
 #   stop: stop test and uninstall blueprint
 #   clean: cleanup after test
-#   collector: attach to the collector VM and run the collector
+#   Test:
+#     collector: attach to the collector VM and run the collector
+#     traffic: generate some traffic
+#     pause: pause the VNF (web server) for a minute to generate a state change
+#     nic: timed ifdown/ifup to generate a NIC fault report
 
 trap 'fail' ERR
 
@@ -240,42 +246,6 @@ EOF
   fail
 }
 
-collector () {
-  echo "$0: setup OpenStack CLI environment"
-  source /tmp/tacker/admin-openrc.sh
-
-  echo "$0: find Collector VM IP"
-  VDU2_IP=$(openstack server list | awk "/VDU2/ { print \$10 }")
-
-  echo "$0: Start the VES Collector in VDU2 - Stop first if running"
-  sudo cp /tmp/tacker/vHello.pem /tmp/vHello.pem
-  sudo chown $USER:$USER /tmp/vHello.pem
-  chmod 600 /tmp/vHello.pem
-  ssh -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU2_IP << 'EOF'
-sudo kill $(ps -ef | grep evel-test-collector | awk '{print $2}')
-cd /home/ubuntu/
-nohup python evel-test-collector/code/collector/collector.py \
-       --config evel-test-collector/config/collector.conf \
-       --section default \
-       --verbose >~/ves.log &
-EOF
-}
-
-traffic () {
-  echo "$0: setup OpenStack CLI environment"
-  source /tmp/tacker/admin-openrc.sh
-
-  echo "$0: find Agent VM IP"
-  VDU1_IP=$(openstack server list | awk "/VDU1/ { print \$10 }")
-
-  echo "$0: Generate some traffic, somewhat randomly"
-  while true
-  do
-    sleep .0$[ ( $RANDOM % 10 ) + 1 ]s
-    curl -s http://$VDU1_IP > /dev/null
-  done
-}
-
 stop() {
   echo "$0: setup OpenStack CLI environment"
   source /tmp/tacker/admin-openrc.sh
@@ -287,6 +257,52 @@ stop() {
 #  fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done
   sg=($(openstack security group list|grep vHello|awk '{print $2}'))
   for id in ${sg[@]}; do try 5 5 "openstack security group delete ${id}";  done
+}
+
+#
+# Test tools and scenarios
+#
+
+get_vdu_ip () {
+  source /tmp/tacker/admin-openrc.sh
+
+  echo "$0: find VM IP for $1"
+  vdu_ip=$(openstack server list | awk "/$1/ { print \$10 }")
+}
+
+collector () {
+  echo "$0: Start the VES Collector in VDU2 - Stop first if running"
+  get_vdu_ip VDU2
+  sudo cp /tmp/tacker/vHello.pem /tmp/vHello.pem
+  sudo chown $USER:$USER /tmp/vHello.pem
+  chmod 600 /tmp/vHello.pem
+  ssh -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$vdu_ip << 'EOF'
+sudo kill $(ps -ef | grep evel-test-collector | awk '{print $2}')
+cd /home/ubuntu/
+nohup python evel-test-collector/code/collector/collector.py \
+       --config evel-test-collector/config/collector.conf \
+       --section default \
+       --verbose >~/ves.log &
+EOF
+}
+
+traffic () {
+  echo "$0: Generate some traffic, somewhat randomly"
+  get_vdu_ip VDU1
+  while true
+  do
+    sleep .0$[ ( $RANDOM % 10 ) + 1 ]s
+    curl -s http://$vdu_ip > /dev/null
+  done
+}
+
+pause () {
+  echo "$0: Pause the VNF (web server) for a minute to generate a state change fault report (Stopped)"
+  get_vdu_ip VDU1
+  ssh -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$vdu_ip "sudo docker pause vHello"
+  sleep 60
+  echo "$0: Unpausing the VNF to generate a state change fault report (Started)"
+  ssh -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$vdu_ip "sudo docker unpause vHello"
 }
 
 forward_to_container () {
@@ -315,9 +331,12 @@ case "$1" in
     fi
     pass
     ;;
-  collector|traffic)
+  traffic)
     $1
     pass
+    ;;
+  test)
+    $2
     ;;
   clean)
     echo "$0: Uninstall Tacker and test environment"

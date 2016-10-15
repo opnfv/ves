@@ -145,31 +145,26 @@ void check_app_container_state() {
   printf("Checking status of app container\n");
   FILE *fp;
   int status;
-  const int JSON_MAX = 1000;
-  char json_line[JSON_MAX];
+  char state[100];
 
-  fp = popen("sudo docker inspect vHello", "r");
+  fp = popen("sudo docker inspect vHello | grep Status | sed -- 's/,//g' | sed -- 's/\"//g' | sed -- 's/            Status: //g'", "r");
   if (fp == NULL) {
     EVEL_ERROR("popen failed to execute command");
   }
 
-  while (fgets(json_line, JSON_MAX, fp) != NULL) {
-    if (strstr(json_line, "Running") != NULL) {
-      if (strstr(json_line, "true") != NULL) {
-        if (strcmp(app_prevstate,"Stopped") == 0) {
-          printf("App state change detected: Started\n");
-          report_app_statechange("Started");
-          app_prevstate = "Running";
-        }
-      }
-      else {
-        if (strcmp(app_prevstate, "Running") == 0) {
-          printf("App state change detected: Stopped\n");
-          report_app_statechange("Stopped");
-          app_prevstate = "Stopped";
-        }
-      }
-      break;
+  fgets(state, 100, fp);
+  if (strstr(state, "running") != NULL) {
+    if (strcmp(app_prevstate,"Stopped") == 0) {
+      printf("App state change detected: Started\n");
+      report_app_statechange("Started");
+      app_prevstate = "Running";
+    }
+  }
+  else {
+    if (strcmp(app_prevstate, "Running") == 0) {
+      printf("App state change detected: Stopped\n");
+      report_app_statechange("Stopped");
+      app_prevstate = "Stopped";
     }
   }
   status = pclose(fp);
@@ -216,7 +211,6 @@ void measure_traffic() {
   if (sec == 0) sec = 59;
   sprintf(secs, "%02d", sec);
   strncat(period, secs, 9);
-  printf("%s\n", period);
 
   strcpy(cmd, "sudo docker logs vHello | grep -c ");
   strncat(cmd, period, 100);
@@ -440,7 +434,7 @@ int main(int argc, char ** argv)
   while (1)
   {
     EVEL_INFO("MAI: Starting main loop");
-    printf("Starting main loop\n");
+//    printf("Starting main loop\n");
 
     printf("Sending heartbeat\n");
     heartbeat = evel_new_heartbeat();
@@ -464,7 +458,7 @@ int main(int argc, char ** argv)
     /* MAIN RETRY LOOP.  Loop every 10 secs.                                 */
     /* TODO: Listener for throttling back scheduled reports.                 */
     /*************************************************************************/
-    printf("End of main loop, sleeping for 10 seconds\n");
+ //   printf("End of main loop, sleeping for 10 seconds\n");
     fflush(stdout);
     sleep(10);
  }

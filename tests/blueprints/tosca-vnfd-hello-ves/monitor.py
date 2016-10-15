@@ -25,9 +25,13 @@ with open('/home/ubuntu/ves.log') as f:
     if line:
 #      print line,
       if "requestRate" in line:
-#         print line,
-         rate = line[27:-2]
-         print 'request rate: {0}'.format(rate)
+#       print line,
+        rate = line[27:-2]
+        print 'request rate: {0}'.format(rate)
 #....5....1....5....2....5....3....5
 #            "requestRate": 2264,
+      if "\"specificProblem\": \"Started\"" in line:
+        print 'app state change: Started'
+      if "\"specificProblem\": \"Stopped\"" in line:
+        print 'app state change: Stopped'
 
