@@ -228,14 +228,14 @@ EOF
   scp -i /tmp/tacker/vHello.pem -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/start.sh ubuntu@$VDU1_IP:/home/ubuntu/start.sh
   ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU1_IP "bash /home/ubuntu/start.sh $VDU1_ID $VDU2_IP hello world"
 
-  echo "$0: verify vHello server is running"
+  echo "$0: verify vHello server is running at http://$VDU1_IP"
   apt-get install -y curl
   count=10
   while [[ $count -gt 0 ]] 
   do 
     sleep 60
     let count=$count-1
-    if [[ $(curl http://$VDU1_IP | grep -c "Hello World") == 1 ]]; then pass; fi
+    if [[ $(curl http://$VDU1_IP | grep -c "Hello World") > 0 ]]; then pass; fi
   done
   fail
 }
@@ -248,13 +248,16 @@ collector () {
   VDU2_IP=$(openstack server list | awk "/VDU2/ { print \$10 }")
 
   echo "$0: Start the VES Collector in VDU2 - Stop first if running"
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU2_IP << 'EOF'
+  sudo cp /tmp/tacker/vHello.pem /tmp/vHello.pem
+  sudo chown $USER:$USER /tmp/vHello.pem
+  chmod 600 /tmp/vHello.pem
+  ssh -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU2_IP << 'EOF'
 sudo kill $(ps -ef | grep evel-test-collector | awk '{print $2}')
 cd /home/ubuntu/
 python evel-test-collector/code/collector/collector.py \
        --config evel-test-collector/config/collector.conf \
        --section default \
-       --verbose
+       --verbose >~/ves.log
 EOF
 }
 

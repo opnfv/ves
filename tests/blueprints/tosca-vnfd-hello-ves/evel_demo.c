@@ -205,10 +205,18 @@ void measure_traffic() {
   double memory_configured = 0;
   double memory_used = 0;
   int request_rate;
+  char secs [3];
+  int sec;
 
   time (&rawtime);
   timeinfo = localtime (&rawtime);
-  strftime (period,9,"%H:%M:$S",timeinfo);
+  strftime(period,7,"%H:%M:",timeinfo);
+  strftime(secs,2,"%S",timeinfo);
+  sec = atoi(secs);
+  if (sec == 0) sec = 59;
+  sprintf(secs, "%02d", sec);
+  strncat(period, secs, 9);
+  printf("%s\n", period);
 
   strcpy(cmd, "sudo docker logs vHello | grep -c ");
   strncat(cmd, period, 100);
