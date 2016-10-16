@@ -180,6 +180,52 @@ void check_app_container_state() {
  *
  * param[in]  none
  *****************************************************************************/
+
+double cpu(char *id) {
+  double a, b, loadavg;
+  FILE *fp;
+  int status;
+  char str[100], save[100];
+  char *cpu;
+  a = 0;
+  b = 0;
+
+  fp = popen("cat /proc/stat", "r");
+  if (fp == NULL) {
+    EVEL_ERROR("popen failed to execute command");
+  }
+
+  while (fgets(str, 100, fp) != NULL) {
+    strcpy(save, str);
+//    printf("line: %s\n", str);
+    cpu = strtok(str, " ");
+    if (strcmp(cpu, id) == 0) {
+      // Sum across user, nice, system, idle
+      strcpy(str, save);
+      a = atof(strtok(NULL, " "));
+      strcpy(str, save);
+      a += atof(strtok(NULL, " "));
+      strcpy(str, save);
+      a += atof(strtok(NULL, " "));
+      strcpy(str, save);
+      b = a + atof(strtok(NULL, " "));
+      loadavg = a/b;
+      printf("Load for %s found: %f\n", id, a/b);
+      break;
+    }
+    else if (strcmp(cpu, "intr") == 0) {
+      loadavg = -1;
+      break;
+    }
+  }
+
+  status = pclose(fp);
+  if (status == -1) {
+    EVEL_ERROR("pclose returned an error");
+  }
+  return(loadavg);
+}
+
 void measure_traffic() {
 
   printf("Checking app traffic\n");
@@ -191,7 +237,7 @@ void measure_traffic() {
   char count[10];
   time_t rawtime;
   struct tm * timeinfo;
-  char period [9];
+  char period [21];
   char cmd [100];
   int concurrent_sessions = 0;
   int configured_entities = 0;
@@ -202,16 +248,18 @@ void measure_traffic() {
   int request_rate;
   char secs [3];
   int sec;
+  double loadavg;
 
   time (&rawtime);
   timeinfo = localtime (&rawtime);
-  strftime(period,7,"%H:%M:",timeinfo);
+  strftime(period,21,"%d/%b/%Y:%H:%M:",timeinfo);
   strftime(secs,3,"%S",timeinfo);
   sec = atoi(secs);
   if (sec == 0) sec = 59;
   sprintf(secs, "%02d", sec);
-  strncat(period, secs, 9);
-
+  strncat(period, secs, 21);
+  // ....x....1....x....2.
+  // 15/Oct/2016:17:51:19
   strcpy(cmd, "sudo docker logs vHello | grep -c ");
   strncat(cmd, period, 100);
 
@@ -229,9 +277,21 @@ void measure_traffic() {
 
     if (measurement != NULL) {
       evel_measurement_type_set(measurement, "HTTP request rate");
-      evel_measurement_agg_cpu_use_set(measurement, 8.8);
-      evel_measurement_cpu_use_add(measurement, "cpu1", 11.11);
-      evel_measurement_cpu_use_add(measurement, "cpu2", 22.22);
+      if ((loadavg=cpu("cpu")) != -1) {
+        evel_measurement_agg_cpu_use_set(measurement, loadavg);
+      }
+      if ((loadavg=cpu("cpu0")) != -1) {
+        evel_measurement_cpu_use_add(measurement, "cpu0", loadavg);
+      }
+      if ((loadavg=cpu("cpu1")) != -1) {
+        evel_measurement_cpu_use_add(measurement, "cpu1", loadavg);
+      }
+      if ((loadavg=cpu("cpu2")) != -1) {
+        evel_measurement_cpu_use_add(measurement, "cpu2", loadavg);
+      }
+      if ((loadavg=cpu("cpu3")) != -1) {
+        evel_measurement_cpu_use_add(measurement, "cpu3", loadavg);
+      }
       evel_measurement_fsys_use_add(measurement,"00-11-22",100.11, 100.22, 33,
                                                            200.11, 200.22, 44);
       evel_measurement_fsys_use_add(measurement,"33-44-55",300.11, 300.22, 55,
