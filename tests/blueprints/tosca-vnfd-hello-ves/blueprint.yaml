@@ -23,7 +23,7 @@ topology_template:
           param0: key1
           param1: key2
 
-    CP1:
+    CP11:
       type: tosca.nodes.nfv.CP.Tacker
       properties:
         management: true
@@ -34,7 +34,7 @@ topology_template:
         - virtualBinding:
             node: VDU1
 
-    CP2:
+    CP12:
       type: tosca.nodes.nfv.CP.Tacker
       properties:
         anti_spoofing_protection: false
@@ -43,18 +43,6 @@ topology_template:
             node: VL2
         - virtualBinding:
             node: VDU1
-
-    VL1:
-      type: tosca.nodes.nfv.VL
-      properties:
-        network_name: vnf_mgmt
-        vendor: Tacker
-
-    VL2:
-      type: tosca.nodes.nfv.VL
-      properties:
-        network_name: vnf_private
-        vendor: Tacker
 
     VDU2:
       type: tosca.nodes.nfv.VDU.Tacker
@@ -72,36 +60,109 @@ topology_template:
           param0: key1
           param1: key2
 
-    CP3:
+    CP21:
       type: tosca.nodes.nfv.CP.Tacker
       properties:
         management: true
         anti_spoofing_protection: false
       requirements:
         - virtualLink:
-            node: VL3
+            node: VL1
         - virtualBinding:
             node: VDU2
 
-    CP4:
+    CP22:
       type: tosca.nodes.nfv.CP.Tacker
       properties:
         anti_spoofing_protection: false
       requirements:
         - virtualLink:
-            node: VL4
+            node: VL2
         - virtualBinding:
             node: VDU2
 
-    VL3:
+    VDU3:
+      type: tosca.nodes.nfv.VDU.Tacker
+      capabilities:
+        nfv_compute:
+          properties:
+            num_cpus: 1
+            mem_size: 1024 MB
+            disk_size: 4 GB
+      properties:
+        image: models-xenial-server
+        availability_zone: nova
+        mgmt_driver: noop
+        config: |
+          param0: key1
+          param1: key2
+
+    CP31:
+      type: tosca.nodes.nfv.CP.Tacker
+      properties:
+        management: true
+        anti_spoofing_protection: false
+      requirements:
+        - virtualLink:
+            node: VL1
+        - virtualBinding:
+            node: VDU3
+
+    CP32:
+      type: tosca.nodes.nfv.CP.Tacker
+      properties:
+        anti_spoofing_protection: false
+      requirements:
+        - virtualLink:
+            node: VL2
+        - virtualBinding:
+            node: VDU3
+
+    VDU4:
+      type: tosca.nodes.nfv.VDU.Tacker
+      capabilities:
+        nfv_compute:
+          properties:
+            num_cpus: 1
+            mem_size: 1024 MB
+            disk_size: 4 GB
+      properties:
+        image: models-xenial-server
+        availability_zone: nova
+        mgmt_driver: noop
+        config: |
+          param0: key1
+          param1: key2
+
+    CP41:
+      type: tosca.nodes.nfv.CP.Tacker
+      properties:
+        management: true
+        anti_spoofing_protection: false
+      requirements:
+        - virtualLink:
+            node: VL1
+        - virtualBinding:
+            node: VDU4
+
+    CP42:
+      type: tosca.nodes.nfv.CP.Tacker
+      properties:
+        anti_spoofing_protection: false
+      requirements:
+        - virtualLink:
+            node: VL2
+        - virtualBinding:
+            node: VDU4
+
+    VL1:
       type: tosca.nodes.nfv.VL
       properties:
         network_name: vnf_mgmt
         vendor: Tacker
 
-    VL4:
+    VL2:
       type: tosca.nodes.nfv.VL
       properties:
         network_name: vnf_private
         vendor: Tacker
-

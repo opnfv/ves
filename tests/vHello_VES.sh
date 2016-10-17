@@ -173,17 +173,21 @@ start() {
   done
 
   echo "$0: directly set port security on ports (bug/unsupported in Mitaka Tacker?)"
+  vdus="VDU1 VDU2 VDU3 VDU4"
+  vdui="1 2 3 4"
+  declare -a vdu_id=()
+  declare -a vdu_ip=()
+  declare -a vdu_url=()
   HEAT_ID=$(tacker vnf-show hello-ves | awk "/instance_id/ { print \$4 }")
-  VDU1_ID=$(openstack stack resource list $HEAT_ID | awk "/VDU1 / { print \$4 }")
-  id=($(neutron port-list|grep -v "+"|grep -v name|awk '{print $2}'))
-  for id in ${id[@]}; do
-    if [[ $(neutron port-show $id|grep $VDU1_ID) ]]; then neutron port-update ${id} --port-security-enabled=True; fi
+  for i in $vdui; do
+    vdu_id[$i]=$(openstack stack resource list $HEAT_ID | awk "/$vdu / { print \$4 }")
   done
 
-  VDU2_ID=$(openstack stack resource list $HEAT_ID | awk "/VDU2 / { print \$4 }")
   id=($(neutron port-list|grep -v "+"|grep -v name|awk '{print $2}'))
   for id in ${id[@]}; do
-    if [[ $(neutron port-show $id|grep $VDU2_ID) ]]; then neutron port-update ${id} --port-security-enabled=True; fi
+    if [[ $(neutron port-show $id|grep -e ${vdu_id[1]} -e ${vdu_id[2]} -e ${vdu_id[3]} -e ${vdu_id[4]}) ]]; then 
+      neutron port-update ${id} --port-security-enabled=True
+    fi
   done
 
   echo "$0: directly assign security group (unsupported in Mitaka Tacker)"
@@ -191,31 +195,31 @@ start() {
   openstack security group create vHello
   openstack security group rule create --ingress --protocol TCP --dst-port 22:22 vHello
   openstack security group rule create --ingress --protocol TCP --dst-port 80:80 vHello
-  openstack server add security group $VDU1_ID vHello
-  openstack server add security group $VDU1_ID default
-  openstack server add security group $VDU2_ID vHello
-  openstack server add security group $VDU2_ID default
+  for i in $vdui; do
+    openstack server add security group ${vdu_id[$i]} vHello
+    openstack server add security group ${vdu_id[$i]} default
+  done
 
   echo "$0: associate floating IPs"
   get_floating_net
-  FIP=$(openstack floating ip create $FLOATING_NETWORK_NAME | awk "/floating_ip_address/ { print \$4 }")
-  nova floating-ip-associate $VDU1_ID $FIP
-  FIP=$(openstack floating ip create $FLOATING_NETWORK_NAME | awk "/floating_ip_address/ { print \$4 }")
-  nova floating-ip-associate $VDU2_ID $FIP
+  for i in $vdui; do
+    vdu_ip[$i]=$(openstack floating ip create $FLOATING_NETWORK_NAME | awk "/floating_ip_address/ { print \$4 }")
+    nova floating-ip-associate ${vdu_id[$i]} ${vdu_ip[$i]}
+  done
 
   echo "$0: get web server addresses"
-  VDU1_IP=$(openstack server show $VDU1_ID | awk "/ addresses / { print \$6 }")
-  VDU1_URL="http://$VUD1_IP"
-  VDU2_IP=$(openstack server show $VDU2_ID | awk "/ addresses / { print \$6 }")
-  VDU2_URL="http://$VUD2_IP:30000"
+  vdu_url[1]="http://${vdu_ip[1]}"
+  vdu_url[2]="http://${vdu_ip[3]}"
+  vdu_url[3]="http://${vdu_ip[3]}"
+  vdu_url[4]="http://${vdu_ip[4]}:30000/eventListener/v1"
 
   echo "$0: wait 30 seconds for server SSH to be available"
   sleep 30
 
-  echo "$0: Setup the VES Collector in VDU2"
+  echo "$0: Setup the VES Collector in VDU4"
   chown root /tmp/tacker/vHello.pem
   # Note below: python (2.7) is required due to dependency on module 'ConfigParser'
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU2_IP << EOF
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[4]} << EOF
 sudo apt-get update
 sudo apt-get upgrade -y
 sudo apt-get install -y python python-jsonschema
@@ -229,21 +233,31 @@ sed -i -- 's/vel_username = /vel_username = hello/' evel-test-collector/config/c
 sed -i -- 's/vel_password = /vel_password = world/' evel-test-collector/config/collector.conf
 EOF
   # Replacing the default collector with monitor.py which has processing logic as well
-  scp -i /tmp/tacker/vHello.pem -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/monitor.py ubuntu@$VDU2_IP:/home/ubuntu/monitor.py
+  scp -i /tmp/tacker/vHello.pem -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/monitor.py ubuntu@${vdu_ip[4]}:/home/ubuntu/monitor.py
 
-  echo "$0: start vHello web server in VDU1"
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU1_IP "sudo chown ubuntu /home/ubuntu"
-  scp -i /tmp/tacker/vHello.pem -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/start.sh ubuntu@$VDU1_IP:/home/ubuntu/start.sh
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU1_IP "bash /home/ubuntu/start.sh $VDU1_ID $VDU2_IP hello world"
+  echo "$0: start LB in VDU3"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[3]} <<EOF
+sudo iptables -A PREROUTING -i eth0 -p tcp --dport 80 -m state --state NEW -m nth --counter 0 --every 2 --packet 0 -j DNAT --to-destination ${vdu_ip[1]}
+sudo iptables -A PREROUTING -i eth0 -p tcp --dport 80 -m state --state NEW -m nth --counter 0 --every 2 --packet 1 -j DNAT --to-destination ${vdu_ip[2]}
+EOF
 
-  echo "$0: verify vHello server is running at http://$VDU1_IP"
+  echo "$0: start vHello web server in VDU1/VDU2"
+  vdu1="1 2"
+  for i in $vdui; do
+    echo "$0: start vHello web server at ${vdu_ip[$i]}"
+    ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[$i]} "sudo chown ubuntu /home/ubuntu"
+    scp -i /tmp/tacker/vHello.pem -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/start.sh ubuntu@${vdu_ip[$i]}:/home/ubuntu/start.sh
+    ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[$i]} "bash /home/ubuntu/start.sh ${vdu_id[$i]} ${vdu_ip[$i]} hello world"
+  done
+
+  echo "$0: verify vHello server is running at http://${vdu_ip[3]}"
   apt-get install -y curl
   count=10
   while [[ $count -gt 0 ]] 
   do 
     sleep 60
     let count=$count-1
-    if [[ $(curl http://$VDU1_IP | grep -c "Hello World") > 0 ]]; then pass; fi
+    if [[ $(curl http://${vdu_ip[3]} | grep -c "Hello World") > 0 ]]; then pass; fi
   done
   fail
 }
@@ -269,16 +283,16 @@ get_vdu_ip () {
   source /tmp/tacker/admin-openrc.sh
 
   echo "$0: find VM IP for $1"
-  vdu_ip=$(openstack server list | awk "/$1/ { print \$10 }")
+  ip=$(openstack server list | awk "/$1/ { print \$10 }")
 }
 
 monitor () {
-  echo "$0: Start the VES Monitor in VDU2 - Stop first if running"
-  get_vdu_ip VDU2
+  echo "$0: Start the VES Monitor in VDU4 - Stop first if running"
+  get_vdu_ip VDU4
   sudo cp /tmp/tacker/vHello.pem /tmp/vHello.pem
   sudo chown $USER:$USER /tmp/vHello.pem
   chmod 600 /tmp/vHello.pem
-  ssh -t -t -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$vdu_ip << 'EOF'
+  ssh -t -t -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$ip << 'EOF'
 sudo kill $(ps -ef | grep evel-test-collector | awk '{print $2}')
 python monitor.py --config evel-test-collector/config/collector.conf --section default 
 EOF
@@ -286,21 +300,21 @@ EOF
 
 traffic () {
   echo "$0: Generate some traffic, somewhat randomly"
-  get_vdu_ip VDU1
+  get_vdu_ip VDU3
   while true
   do
     sleep .0$[ ( $RANDOM % 10 ) + 1 ]s
-    curl -s http://$vdu_ip > /dev/null
+    curl -s http://$ip > /dev/null
   done
 }
 
 pause () {
-  echo "$0: Pause the VNF (web server) for a minute to generate a state change fault report (Stopped)"
+  echo "$0: Pause the VNF (web server) in VDU1 for a minute to generate a state change fault report (Stopped)"
   get_vdu_ip VDU1
-  ssh -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$vdu_ip "sudo docker pause vHello"
+  ssh -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$ip "sudo docker pause vHello"
   sleep 60
   echo "$0: Unpausing the VNF to generate a state change fault report (Started)"
-  ssh -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$vdu_ip "sudo docker unpause vHello"
+  ssh -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$ip "sudo docker unpause vHello"
 }
 
 forward_to_container () {
