@@ -22,7 +22,7 @@
 #   $ git clone https://gerrit.opnfv.org/gerrit/ves
 #   $ cd ves/tests
 #   $ bash vHello_VES.sh [setup|start|run|test|stop|clean] 
-#        [collector|traffic|pause|nic]
+#        [monitor|traffic|pause|nic]
 #   setup: setup test environment
 #   start: install blueprint and run test
 #   run: setup test environment and run test
@@ -30,7 +30,7 @@
 #   stop: stop test and uninstall blueprint
 #   clean: cleanup after test
 #   Test:
-#     collector: attach to the collector VM and run the collector
+#     monitor: attach to the collector VM and run the VES Monitor
 #     traffic: generate some traffic
 #     pause: pause the VNF (web server) for a minute to generate a state change
 #     nic: timed ifdown/ifup to generate a NIC fault report
@@ -228,6 +228,8 @@ git clone https://github.com/att/evel-test-collector.git
 sed -i -- 's/vel_username = /vel_username = hello/' evel-test-collector/config/collector.conf
 sed -i -- 's/vel_password = /vel_password = world/' evel-test-collector/config/collector.conf
 EOF
+  # Replacing the default collector with monitor.py which has processing logic as well
+  scp -i /tmp/tacker/vHello.pem -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/monitor.py ubuntu@$VDU2_IP:/home/ubuntu/monitor.py
 
   echo "$0: start vHello web server in VDU1"
   ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$VDU1_IP "sudo chown ubuntu /home/ubuntu"
@@ -270,19 +272,15 @@ get_vdu_ip () {
   vdu_ip=$(openstack server list | awk "/$1/ { print \$10 }")
 }
 
-collector () {
-  echo "$0: Start the VES Collector in VDU2 - Stop first if running"
+monitor () {
+  echo "$0: Start the VES Monitor in VDU2 - Stop first if running"
   get_vdu_ip VDU2
   sudo cp /tmp/tacker/vHello.pem /tmp/vHello.pem
   sudo chown $USER:$USER /tmp/vHello.pem
   chmod 600 /tmp/vHello.pem
-  ssh -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$vdu_ip << 'EOF'
+  ssh -t -t -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$vdu_ip << 'EOF'
 sudo kill $(ps -ef | grep evel-test-collector | awk '{print $2}')
-cd /home/ubuntu/
-nohup python evel-test-collector/code/collector/collector.py \
-       --config evel-test-collector/config/collector.conf \
-       --section default \
-       --verbose >~/ves.log &
+python monitor.py --config evel-test-collector/config/collector.conf --section default 
 EOF
 }
 
@@ -350,5 +348,16 @@ case "$1" in
     echo "run: setup test environment and run test"
     echo "stop: stop test and uninstall blueprint"
     echo "clean: cleanup after test"
+    echo "usage: bash vHello_VES.sh [setup|start|run|test|stop|clean] [monitor|traffic|pause|nic]"
+    echo "setup: setup test environment"
+    echo "start: install blueprint and run test"
+    echo "run: setup test environment and run test"
+    echo "test: run test tools/scenario - see below"
+    echo "stop: stop test and uninstall blueprint"
+    echo "clean: cleanup after test"
+    echo "Test:"
+    echo "  monitor: attach to the collector VM and run the VES Monitor"
+    echo "  traffic: generate some traffic"
+    echo "  pause: pause the VNF (web server) for a minute to generate a state change"
     fail
 esac
