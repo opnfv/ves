@@ -19,11 +19,17 @@
 # Status: this is a work in progress, under test.
 #
 # How to use:
-# $ bash start.sh ID IP username password
-#   ID: username:password to use in REST
-#   IP: IP address of the collector
+# Intended to be invoked from vHello_VES.sh
+# $ bash start.sh type params
+#   type: type of VNF component [webserver|lb|monitor]
+#     webserver params: ID CollectorIP username password
+#     lb params:        ID CollectorIP username password app1_ip app2_ip
+#     collector params: ID CollectorIP username password
+#   ID: VM ID
+#   CollectorIP: IP address of the collector
 #   username: Username for Collector RESTful API authentication
 #   password: Password for Collector RESTful API authentication
+#   app1_ip app2_ip: address of the web servers
 
 setup_agent () {
   echo "$0: Install prerequisites"
@@ -46,31 +52,60 @@ setup_agent () {
   sed -i -- "/api_secure,/{n;s/.*/                      \"$username\",/}" evel-library/code/evel_demo/evel_demo.c
   sed -i -- "/\"hello\",/{n;s/.*/                      \"$password\",/}" evel-library/code/evel_demo/evel_demo.c
 
-  echo "$0: Build agent demo"
+  echo "$0: Build evel_demo agent"
   cd evel-library/bldjobs
   make
   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/ubuntu/evel-library/libs/x86_64
   
-  nohup ../output/x86_64/evel_demo --id $agent_id --fqdn $collector_ip --port 30000 --username $username --password $password &
+  echo "$0: Start evel_demo agent"
+  nohup ../output/x86_64/evel_demo --id $vm_id --fqdn $collector_ip --port 30000 --username $username --password $password > /dev/null 2>&1 &
 
-#  echo "$0: Start agent demo, repeat every minute"
-#  crontab -l > /tmp/cron
-#  echo "* * * * 1-5 /home/ubuntu/evel-library/output/x86_64/evel_demo --id $agent_id --fqdn $collector_ip --port 30000 --username $username --password $password" >> /tmp/cron
-#  crontab /tmp/cron
-#  rm /tmp/cron
+  echo "$0: Install collectd plugin"
+  cd ~
+  git clone https://github.com/maryamtahhan/OpenStackBarcelonaDemo.git
+  cd OpenStackBarcelonaDemo/ves_plugin
+  host=$(hostname)
+  sed -i -- "s/23380d70-2c71-4e35-99e2-f43f97e4ec65/$vm_id/g" ves_plugin.py
+  sed -i -- "s/cscf0001vm001abc001/$host/g" ves_plugin.py
+  sed -i -- "s/cscf0001vm001oam001/$host/g" ves_plugin.py
+  sed -i -- "s/SGW/$type/" ves_plugin.py
+  sed -i -- "s/reporting_entity_id = \"\"/reporting_entity_id = \"$vm_id\"/g" ves_plugin.py
+  sed -i -- "s/reporting_entity_name = \"cscf0001vm001oam001\"/reporting_entity_name = \"$host\"/g" ves_plugin.py 
+  sed -i -- "s/self.__username = ''/self.__username = 'hello'/g" ves_plugin.py
+  sed -i -- "s/self.__password = ''/self.__password = 'world'/g" ves_plugin.py
+  sed -i -- "s/self.__domain = '127.0.0.1'/self.__domain = '$collector_ip'/g" ves_plugin.py
+  sed -i -- "s/measurementForVfScaling/measurementsForVfScaling/g" ves_plugin.py
+
+  sudo apt-get install -y collectd
+  sudo sed -i -- "s/FQDNLookup true/FQDNLookup false/" /etc/collectd/collectd.conf
+  cat <<EOF | sudo tee -a  /etc/collectd/collectd.conf
+<LoadPlugin python>
+  Globals true
+</LoadPlugin>
+
+<Plugin python>
+  ModulePath "/home/ubuntu/OpenStackBarcelonaDemo/ves_plugin/"
+  LogTraces true
+  Interactive false
+  Import "ves_plugin"
+</Plugin>
+EOF
+  sudo service collectd restart
 }
 
-echo "$0: Setup website and dockerfile"
-mkdir ~/www
-mkdir ~/www/html
+setup_webserver () {
+  echo "$0: Setup website and dockerfile"
+  mkdir ~/www
+  mkdir ~/www/html
 
-# ref: https://hub.docker.com/_/nginx/
-cat > ~/www/Dockerfile <<EOM
+  # ref: https://hub.docker.com/_/nginx/
+  cat > ~/www/Dockerfile <<EOM
 FROM nginx
 COPY html /usr/share/nginx/html
 EOM
 
-cat > ~/www/html/index.html <<EOM
+  host=$(hostname)
+  cat > ~/www/html/index.html <<EOM
 <!DOCTYPE html>
 <html>
 <head>
@@ -82,38 +117,84 @@ body { width: 100%; background-color: white; color: black; padding: 0px; margin:
 </head>
 <body>
 Hello World!<br>
+Welcome to OPNFV @ $host!</large><br/>
 <a href="http://wiki.opnfv.org"><img src="https://www.opnfv.org/sites/all/themes/opnfv/logo.png"></a>
 </body></html>
 EOM
 
-cp ~/ves/tests/blueprints/tosca-vnfd-hello-ves/favicon.ico ~/www/html/favicon.ico
+  wget https://git.opnfv.org/cgit/ves/plain/tests/blueprints/tosca-vnfd-hello-ves/favicon.ico -O  ~/www/html/favicon.ico
 
-echo "$0: Install docker"
-# Per https://docs.docker.com/engine/installation/linux/ubuntulinux/
-# Per https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-on-ubuntu-16-04
-sudo apt-get install apt-transport-https ca-certificates
-sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" | sudo tee /etc/apt/sources.list.d/docker.list
-sudo apt-get update
-sudo apt-get purge lxc-docker
-sudo apt-get install -y linux-image-extra-$(uname -r) linux-image-extra-virtual
-sudo apt-get install -y docker-engine
+  echo "$0: Install docker"
+  # Per https://docs.docker.com/engine/installation/linux/ubuntulinux/
+  # Per https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-on-ubuntu-16-04
+  sudo apt-get install apt-transport-https ca-certificates
+  sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+  echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" | sudo tee /etc/apt/sources.list.d/docker.list
+  sudo apt-get update
+  sudo apt-get purge lxc-docker
+  sudo apt-get install -y linux-image-extra-$(uname -r) linux-image-extra-virtual
+  sudo apt-get install -y docker-engine
 
-echo "$0: Get nginx container and start website in docker"
-# Per https://hub.docker.com/_/nginx/
-sudo docker pull nginx
-cd ~/www
-sudo docker build -t vhello .
-sudo docker run --name vHello -d -p 80:80 vhello
+  echo "$0: Get nginx container and start website in docker"
+  # Per https://hub.docker.com/_/nginx/
+  sudo docker pull nginx
+  cd ~/www
+  sudo docker build -t vhello .
+  sudo docker run --name vHello -d -p 80:80 vhello
 
-echo "$0: setup VES event delivery for the nginx server"
+  echo "$0: setup VES agents"
+  setup_agent
 
-# id=$(sudo ls /var/lib/docker/containers)
-# sudo tail -f /var/lib/docker/containers/$id/$id-json.log 
+  # Debug hints
+  # id=$(sudo ls /var/lib/docker/containers)
+  # sudo tail -f /var/lib/docker/containers/$id/$id-json.log \
+  }
 
-agent_id=$1
-collector_ip=$2
-username=$3
-password=$4
+setup_lb () {
+  echo "$0: setup VES load balancer"
+  echo "$0: install dependencies"
+  sudo apt-get update
 
-setup_agent
+  echo "$0: Setup iptables rules"
+  echo "1" | sudo tee /proc/sys/net/ipv4/ip_forward
+  sudo sysctl net.ipv4.ip_forward=1
+  sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -m state --state NEW -m statistic --mode nth --every 2 --packet 0 -j DNAT --to-destination $app1_ip:80
+  sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -m state --state NEW -m statistic --mode nth --every 2 --packet 0 -j DNAT --to-destination $app2_ip:80
+  sudo iptables -t nat -A POSTROUTING -j MASQUERADE
+  # debug hints: list rules (sudo iptables -S -t nat), flush (sudo iptables -F -t nat)
+
+  echo "$0: setup VES agents"
+  setup_agent
+}
+
+setup_monitor () {
+  echo "$0: setup VES Monitor"
+  echo "$0: install dependencies"
+  # Note below: python (2.7) is required due to dependency on module 'ConfigParser'
+  sudo apt-get update
+  sudo apt-get upgrade -y
+  sudo apt-get install -y python python-jsonschema
+
+  echo "$0: setup VES Monitor config"
+  sudo mkdir /var/log/att
+  sudo chown ubuntu /var/log/att
+  touch /var/log/att/collector.log
+  sudo chown ubuntu /home/ubuntu/
+  cd /home/ubuntu/
+  git clone https://github.com/att/evel-test-collector.git
+  sed -i -- "s/vel_username = /vel_username = $username/" evel-test-collector/config/collector.conf
+  sed -i -- "s/vel_password = /vel_password = $password/" evel-test-collector/config/collector.conf
+
+  python monitor.py --config evel-test-collector/config/collector.conf --section default 
+}
+
+type=$1
+vm_id=$2
+collector_ip=$3
+username=$4
+password=$5
+app1_ip=$6
+app2_ip=$7
+
+setup_$type
+exit 0

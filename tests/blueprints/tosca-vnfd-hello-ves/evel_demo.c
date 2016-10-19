@@ -181,48 +181,22 @@ void check_app_container_state() {
  * param[in]  none
  *****************************************************************************/
 
-double cpu(char *id) {
-  double a, b, loadavg;
+double cpu() {
+  double a[4], b[4], loadavg;
   FILE *fp;
   int status;
-  char str[100], save[100];
-  char *cpu;
-  a = 0;
-  b = 0;
 
-  fp = popen("cat /proc/stat", "r");
-  if (fp == NULL) {
-    EVEL_ERROR("popen failed to execute command");
-  }
+  fp = fopen("/proc/stat","r");
+  fscanf(fp,"%*s %lf %lf %lf %lf",&a[0],&a[1],&a[2],&a[3]);
+  fclose(fp);
+  sleep(1);
 
-  while (fgets(str, 100, fp) != NULL) {
-    strcpy(save, str);
-//    printf("line: %s\n", str);
-    cpu = strtok(str, " ");
-    if (strcmp(cpu, id) == 0) {
-      // Sum across user, nice, system, idle
-      strcpy(str, save);
-      a = atof(strtok(NULL, " "));
-      strcpy(str, save);
-      a += atof(strtok(NULL, " "));
-      strcpy(str, save);
-      a += atof(strtok(NULL, " "));
-      strcpy(str, save);
-      b = a + atof(strtok(NULL, " "));
-      loadavg = a/b;
-      printf("Load for %s found: %f\n", id, a/b);
-      break;
-    }
-    else if (strcmp(cpu, "intr") == 0) {
-      loadavg = -1;
-      break;
-    }
-  }
+  fp = fopen("/proc/stat","r");
+  fscanf(fp,"%*s %lf %lf %lf %lf",&b[0],&b[1],&b[2],&b[3]);
+  fclose(fp);
 
-  status = pclose(fp);
-  if (status == -1) {
-    EVEL_ERROR("pclose returned an error");
-  }
+  loadavg = ((b[0]+b[1]+b[2]) - (a[0]+a[1]+a[2])) / ((b[0]+b[1]+b[2]+b[3]) - (a[0]+a[1]+a[2]+a[3]));
+
   return(loadavg);
 }
 
@@ -276,22 +250,10 @@ void measure_traffic() {
       memory_configured, memory_used, request_rate);
 
     if (measurement != NULL) {
+      cpu();
       evel_measurement_type_set(measurement, "HTTP request rate");
-      if ((loadavg=cpu("cpu")) != -1) {
-        evel_measurement_agg_cpu_use_set(measurement, loadavg);
-      }
-      if ((loadavg=cpu("cpu0")) != -1) {
-        evel_measurement_cpu_use_add(measurement, "cpu0", loadavg);
-      }
-      if ((loadavg=cpu("cpu1")) != -1) {
-        evel_measurement_cpu_use_add(measurement, "cpu1", loadavg);
-      }
-      if ((loadavg=cpu("cpu2")) != -1) {
-        evel_measurement_cpu_use_add(measurement, "cpu2", loadavg);
-      }
-      if ((loadavg=cpu("cpu3")) != -1) {
-        evel_measurement_cpu_use_add(measurement, "cpu3", loadavg);
-      }
+      evel_measurement_agg_cpu_use_set(measurement, loadavg);
+      evel_measurement_cpu_use_add(measurement, "cpu0", loadavg);
       evel_measurement_fsys_use_add(measurement,"00-11-22",100.11, 100.22, 33,
                                                            200.11, 200.22, 44);
       evel_measurement_fsys_use_add(measurement,"33-44-55",300.11, 300.22, 55,

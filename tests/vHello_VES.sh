@@ -21,7 +21,7 @@
 # How to use:
 #   $ git clone https://gerrit.opnfv.org/gerrit/ves
 #   $ cd ves/tests
-#   $ bash vHello_VES.sh [setup|start|run|test|stop|clean] 
+#   $ bash vHello_VES.sh [setup|start|run|test|stop|clean] [VDU1|VDU2|VDU3]
 #        [monitor|traffic|pause|nic]
 #   setup: setup test environment
 #   start: install blueprint and run test
@@ -33,19 +33,18 @@
 #     monitor: attach to the collector VM and run the VES Monitor
 #     traffic: generate some traffic
 #     pause: pause the VNF (web server) for a minute to generate a state change
-#     nic: timed ifdown/ifup to generate a NIC fault report
+#       VDU1|VDU2
+#     nic: timed ifdown/ifup to generate a NIC fault report (not yet implemented)
 
 trap 'fail' ERR
 
 pass() {
-  echo "$0: Hooray!"
-  set +x #echo off
+  echo "$0: $(date) Hooray!"
   exit 0
 }
 
 fail() {
-  echo "$0: Test Failed!"
-  set +x
+  echo "$0: $(date) Test Failed!"
   exit 1
 }
 
@@ -57,7 +56,7 @@ get_floating_net () {
   if [[ $FLOATING_NETWORK_ID ]]; then
     FLOATING_NETWORK_NAME=$(openstack network show $FLOATING_NETWORK_ID | awk "/ name / { print \$4 }")
   else
-    echo "$0: Floating network not found"
+    echo "$0: $(date) Floating network not found"
     exit 1
   fi
 }
@@ -71,44 +70,45 @@ try () {
     let count=$count-1
     $3
   done
-  if [[ $count -eq 0 ]]; then echo "$0: Command \"$3\" was not successful after $1 tries"; fi
+  if [[ $count -eq 0 ]]; then echo "$0: $(date) Command \"$3\" was not successful after $1 tries"; fi
 }
 
 setup () {
-  echo "$0: Setup temp test folder /tmp/tacker and copy this script there"
+  echo "$0: $(date) Started"
+  echo "$0: $(date) Setup temp test folder /tmp/tacker and copy this script there"
   mkdir -p /tmp/tacker
   chmod 777 /tmp/tacker/
   cp $0 /tmp/tacker/.
   chmod 755 /tmp/tacker/*.sh
 
-  echo "$0: tacker-setup part 1"
+  echo "$0: $(date) tacker-setup part 1"
   wget https://git.opnfv.org/cgit/models/plain/tests/utils/tacker-setup.sh -O /tmp/tacker/tacker-setup.sh
   bash /tmp/tacker/tacker-setup.sh tacker-cli init
 
-  echo "$0: tacker-setup part 2"
+  echo "$0: $(date) tacker-setup part 2"
   CONTAINER=$(sudo docker ps -l | awk "/tacker/ { print \$1 }")
   dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
   if [ "$dist" == "Ubuntu" ]; then
-    echo "$0: JOID workaround for Colorado - enable ML2 port security"
+    echo "$0: $(date) JOID workaround for Colorado - enable ML2 port security"
     juju set neutron-api enable-ml2-port-security=true
 
-    echo "$0: Execute tacker-setup.sh in the container"
+    echo "$0: $(date) Execute tacker-setup.sh in the container"
     sudo docker exec -it $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh tacker-cli setup
   else
-    echo "$0: Execute tacker-setup.sh in the container"
+    echo "$0: $(date) Execute tacker-setup.sh in the container"
     sudo docker exec -i -t $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh tacker-cli setup
   fi
 
-  echo "$0: reset blueprints folder"
+  echo "$0: $(date) reset blueprints folder"
   if [[ -d /tmp/tacker/blueprints/tosca-vnfd-hello-ves ]]; then rm -rf /tmp/tacker/blueprints/tosca-vnfd-hello-ves; fi
   mkdir -p /tmp/tacker/blueprints/tosca-vnfd-hello-ves
 
-  echo "$0: copy tosca-vnfd-hello-ves to blueprints folder"
+  echo "$0: $(date) copy tosca-vnfd-hello-ves to blueprints folder"
   cp -r blueprints/tosca-vnfd-hello-ves /tmp/tacker/blueprints
 
   # Following two steps are in testing still. The guestfish step needs work.
 
-  #  echo "$0: Create Nova key pair"
+  #  echo "$0: $(date) Create Nova key pair"
   #  mkdir -p ~/.ssh
   #  nova keypair-delete vHello
   #  nova keypair-add vHello > /tmp/tacker/vHello.pem
@@ -116,7 +116,7 @@ setup () {
   #  pubkey=$(nova keypair-show vHello | grep "Public key:" | sed -- 's/Public key: //g')
   #  nova keypair-show vHello | grep "Public key:" | sed -- 's/Public key: //g' >/tmp/tacker/vHello.pub
 
-  echo "$0: Inject key into xenial server image"
+  echo "$0: $(date) Inject key into xenial server image"
   #  wget http://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
   #  sudo yum install -y libguestfs-tools
   #  guestfish <<EOF
@@ -139,58 +139,68 @@ setup () {
   cp blueprints/tosca-vnfd-hello-ves/vHello.pem /tmp/tacker
   chmod 600 /tmp/tacker/vHello.pem
 
-  echo "$0: setup OpenStack CLI environment"
+  echo "$0: $(date) setup OpenStack CLI environment"
   source /tmp/tacker/admin-openrc.sh
 
-  echo "$0: Setup image_id"
+  echo "$0: $(date) Setup image_id"
   image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
-  if [[ -z "$image_id" ]]; then glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --file /tmp/xenial-server-cloudimg-amd64-disk1.img --container-format bare; fi 
+  if [[ -z "$image_id" ]]; then glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --file /tmp/xenial-server-cloudimg-amd64-disk1.img --container-format bare; fi
+
+  echo "$0: $(date) Completed"
 }
 
 start() {
-  echo "$0: setup OpenStack CLI environment"
+  echo "$0: $(date) Started"
+  echo "$0: $(date) setup OpenStack CLI environment"
   source /tmp/tacker/admin-openrc.sh
 
-  echo "$0: create VNFD"
+  echo "$0: $(date) create VNFD"
   cd /tmp/tacker/blueprints/tosca-vnfd-hello-ves
   tacker vnfd-create --vnfd-file blueprint.yaml --name hello-ves
   if [ $? -eq 1 ]; then fail; fi
 
-  echo "$0: create VNF"
+  echo "$0: $(date) create VNF"
   tacker vnf-create --vnfd-name hello-ves --name hello-ves
   if [ $? -eq 1 ]; then fail; fi
 
-  echo "$0: wait for hello-ves to go ACTIVE"
+  echo "$0: $(date) wait for hello-ves to go ACTIVE"
   active=""
   while [[ -z $active ]]
   do
     active=$(tacker vnf-show hello-ves | grep ACTIVE)
     if [ "$(tacker vnf-show hello-ves | grep -c ERROR)" == "1" ]; then 
-      echo "$0: hello-ves VNF creation failed with state ERROR"
+      echo "$0: $(date) hello-ves VNF creation failed with state ERROR"
       fail
     fi
     sleep 10
   done
 
-  echo "$0: directly set port security on ports (bug/unsupported in Mitaka Tacker?)"
+  echo "$0: $(date) directly set port security on ports (bug/unsupported in Mitaka Tacker?)"
   vdus="VDU1 VDU2 VDU3 VDU4"
   vdui="1 2 3 4"
   declare -a vdu_id=()
   declare -a vdu_ip=()
   declare -a vdu_url=()
   HEAT_ID=$(tacker vnf-show hello-ves | awk "/instance_id/ { print \$4 }")
-  for i in $vdui; do
-    vdu_id[$i]=$(openstack stack resource list $HEAT_ID | awk "/$vdu / { print \$4 }")
-  done
+  vdu_id[1]=$(openstack stack resource list $HEAT_ID | awk "/VDU1 / { print \$4 }")
+  vdu_id[2]=$(openstack stack resource list $HEAT_ID | awk "/VDU2 / { print \$4 }")
+  vdu_id[3]=$(openstack stack resource list $HEAT_ID | awk "/VDU3 / { print \$4 }")
+  vdu_id[4]=$(openstack stack resource list $HEAT_ID | awk "/VDU4 / { print \$4 }")
 
+cat >/tmp/grep <<EOF
+${vdu_id[1]}
+${vdu_id[2]}
+${vdu_id[3]}
+${vdu_id[4]}
+EOF
   id=($(neutron port-list|grep -v "+"|grep -v name|awk '{print $2}'))
   for id in ${id[@]}; do
-    if [[ $(neutron port-show $id|grep -e ${vdu_id[1]} -e ${vdu_id[2]} -e ${vdu_id[3]} -e ${vdu_id[4]}) ]]; then 
+    if [[ $(neutron port-show $id | grep -f /tmp/grep) ]]; then 
       neutron port-update ${id} --port-security-enabled=True
     fi
   done
 
-  echo "$0: directly assign security group (unsupported in Mitaka Tacker)"
+  echo "$0: $(date) directly assign security group (unsupported in Mitaka Tacker)"
   if [[ $(openstack security group list | awk "/ vHello / { print \$2 }") ]]; then openstack security group delete vHello; fi
   openstack security group create vHello
   openstack security group rule create --ingress --protocol TCP --dst-port 22:22 vHello
@@ -200,79 +210,65 @@ start() {
     openstack server add security group ${vdu_id[$i]} default
   done
 
-  echo "$0: associate floating IPs"
+  echo "$0: $(date) associate floating IPs"
   get_floating_net
   for i in $vdui; do
     vdu_ip[$i]=$(openstack floating ip create $FLOATING_NETWORK_NAME | awk "/floating_ip_address/ { print \$4 }")
     nova floating-ip-associate ${vdu_id[$i]} ${vdu_ip[$i]}
   done
 
-  echo "$0: get web server addresses"
+  echo "$0: $(date) get web server addresses"
   vdu_url[1]="http://${vdu_ip[1]}"
   vdu_url[2]="http://${vdu_ip[3]}"
   vdu_url[3]="http://${vdu_ip[3]}"
   vdu_url[4]="http://${vdu_ip[4]}:30000/eventListener/v1"
 
-  echo "$0: wait 30 seconds for server SSH to be available"
+  echo "$0: $(date) wait 30 seconds for server SSH to be available"
   sleep 30
 
-  echo "$0: Setup the VES Collector in VDU4"
-  chown root /tmp/tacker/vHello.pem
-  # Note below: python (2.7) is required due to dependency on module 'ConfigParser'
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[4]} << EOF
-sudo apt-get update
-sudo apt-get upgrade -y
-sudo apt-get install -y python python-jsonschema
-sudo mkdir /var/log/att
-sudo chown ubuntu /var/log/att
-touch /var/log/att/collector.log
-sudo chown ubuntu /home/ubuntu/
-cd /home/ubuntu/
-git clone https://github.com/att/evel-test-collector.git
-sed -i -- 's/vel_username = /vel_username = hello/' evel-test-collector/config/collector.conf
-sed -i -- 's/vel_password = /vel_password = world/' evel-test-collector/config/collector.conf
-EOF
-  # Replacing the default collector with monitor.py which has processing logic as well
-  scp -i /tmp/tacker/vHello.pem -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/monitor.py ubuntu@${vdu_ip[4]}:/home/ubuntu/monitor.py
-
-  echo "$0: start LB in VDU3"
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[3]} <<EOF
-sudo iptables -A PREROUTING -i eth0 -p tcp --dport 80 -m state --state NEW -m nth --counter 0 --every 2 --packet 0 -j DNAT --to-destination ${vdu_ip[1]}
-sudo iptables -A PREROUTING -i eth0 -p tcp --dport 80 -m state --state NEW -m nth --counter 0 --every 2 --packet 1 -j DNAT --to-destination ${vdu_ip[2]}
-EOF
-
-  echo "$0: start vHello web server in VDU1/VDU2"
-  vdu1="1 2"
+  echo "$0: $(date) Copy startup script to the VMs"
   for i in $vdui; do
-    echo "$0: start vHello web server at ${vdu_ip[$i]}"
     ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[$i]} "sudo chown ubuntu /home/ubuntu"
     scp -i /tmp/tacker/vHello.pem -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/start.sh ubuntu@${vdu_ip[$i]}:/home/ubuntu/start.sh
-    ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[$i]} "bash /home/ubuntu/start.sh ${vdu_id[$i]} ${vdu_ip[$i]} hello world"
   done
 
-  echo "$0: verify vHello server is running at http://${vdu_ip[3]}"
-  apt-get install -y curl
-  count=10
-  while [[ $count -gt 0 ]] 
-  do 
-    sleep 60
-    let count=$count-1
-    if [[ $(curl http://${vdu_ip[3]} | grep -c "Hello World") > 0 ]]; then pass; fi
-  done
-  fail
+  echo "$0: $(date) start vHello webserver in VDU1 at ${vdu_ip[1]}"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[1]} "bash /home/ubuntu/start.sh webserver ${vdu_id[1]} ${vdu_ip[4]} hello world; exit"
+
+  echo "$0: $(date) start vHello webserver in VDU2 at ${vdu_ip[2]}"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[2]} "bash /home/ubuntu/start.sh webserver ${vdu_id[2]} ${vdu_ip[4]} hello world; exit"
+
+  echo "$0: $(date) start LB in VDU3 at ${vdu_ip[3]}"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[3]} "bash /home/ubuntu/start.sh lb ${vdu_id[3]} ${vdu_ip[4]} hello world; exit"
+
+  echo "$0: $(date) start Monitor in VDU4 at ${vdu_ip[4]}"
+  # Replacing the default collector with monitor.py which has processing logic as well
+  scp -i /tmp/tacker/vHello.pem -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/monitor.py ubuntu@${vdu_ip[4]}:/home/ubuntu/monitor.py
+  ssh -i /tmp/tacker/vHello.pem -t -t -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[4]} "bash /home/ubuntu/start.sh monitor ${vdu_id[4]} ${vdu_ip[4]} hello world; exit"
+
+#  echo "$0: $(date) verify vHello server is running at http://${vdu_ip[3]}"
+#  apt-get install -y curl
+#  count=10
+#  while [[ $count -gt 0 ]] 
+#  do 
+#    sleep 60
+#    let count=$count-1
+#    if [[ $(curl http://${vdu_ip[3]} | grep -c "Hello World") > 0 ]]; then pass; fi
+#  done
+#  fail
 }
 
 stop() {
-  echo "$0: setup OpenStack CLI environment"
+  echo "$0: $(date) setup OpenStack CLI environment"
   source /tmp/tacker/admin-openrc.sh
 
-  echo "$0: uninstall vHello blueprint via CLI"
+  echo "$0: $(date) uninstall vHello blueprint via CLI"
   vid=($(tacker vnf-list|grep hello-ves|awk '{print $2}')); for id in ${vid[@]}; do tacker vnf-delete ${id};  done
   vid=($(tacker vnfd-list|grep hello-ves|awk '{print $2}')); for id in ${vid[@]}; do tacker vnfd-delete ${id};  done
 # Need to remove the floatingip deletion or make it specific to the vHello VM
-#  fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done
+  fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done
   sg=($(openstack security group list|grep vHello|awk '{print $2}'))
-  for id in ${sg[@]}; do try 5 5 "openstack security group delete ${id}";  done
+  for id in ${sg[@]}; do try 10 5 "openstack security group delete ${id}";  done
 }
 
 #
@@ -282,12 +278,12 @@ stop() {
 get_vdu_ip () {
   source /tmp/tacker/admin-openrc.sh
 
-  echo "$0: find VM IP for $1"
+  echo "$0: $(date) find VM IP for $1"
   ip=$(openstack server list | awk "/$1/ { print \$10 }")
 }
 
 monitor () {
-  echo "$0: Start the VES Monitor in VDU4 - Stop first if running"
+  echo "$0: $(date) Start the VES Monitor in VDU4 - Stop first if running"
   get_vdu_ip VDU4
   sudo cp /tmp/tacker/vHello.pem /tmp/vHello.pem
   sudo chown $USER:$USER /tmp/vHello.pem
@@ -299,26 +295,29 @@ EOF
 }
 
 traffic () {
-  echo "$0: Generate some traffic, somewhat randomly"
+  echo "$0: $(date) Generate some traffic, somewhat randomly"
   get_vdu_ip VDU3
+  ns="0 00 000"
   while true
   do
-    sleep .0$[ ( $RANDOM % 10 ) + 1 ]s
-    curl -s http://$ip > /dev/null
+    for n in $ns; do
+      sleep .$n$[ ( $RANDOM % 10 ) + 1 ]s
+      curl -s http://$ip > /dev/null
+    done
   done
 }
 
 pause () {
-  echo "$0: Pause the VNF (web server) in VDU1 for a minute to generate a state change fault report (Stopped)"
-  get_vdu_ip VDU1
+  echo "$0: $(date) Pause the VNF (web server) in $1 for a minute to generate a state change fault report (Stopped)"
+  get_vdu_ip $1
   ssh -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$ip "sudo docker pause vHello"
   sleep 60
-  echo "$0: Unpausing the VNF to generate a state change fault report (Started)"
+  echo "$0: $(date) Unpausing the VNF to generate a state change fault report (Started)"
   ssh -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$ip "sudo docker unpause vHello"
 }
 
 forward_to_container () {
-  echo "$0: pass $1 command to this script in the tacker container"
+  echo "$0: $(date) pass $1 command to this script in the tacker container"
   CONTAINER=$(sudo docker ps -a | awk "/tacker/ { print \$1 }")
   sudo docker exec $CONTAINER /bin/bash /tmp/tacker/vHello_VES.sh $1 $1
   if [ $? -eq 1 ]; then fail; fi
@@ -348,10 +347,10 @@ case "$1" in
     pass
     ;;
   test)
-    $2
+    $2 $3
     ;;
   clean)
-    echo "$0: Uninstall Tacker and test environment"
+    echo "$0: $(date) Uninstall Tacker and test environment"
     bash /tmp/tacker/tacker-setup.sh $1 clean
     pass
     ;;
