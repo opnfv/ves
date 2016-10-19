@@ -37,9 +37,8 @@ import select
 report_time = ''
 requestRate = ''
 monitor_mode = "f"
-summary = ['***** Summary of key stats *****','','','']
-status = ['','unknown','unknown','unknown']
-vdu = 0
+summary = ['***** Summary of key stats *****','','','','']
+status = ['','unknown','unknown','unknown','unknown']
 base_url = ''
 template_404 = b'''POST {0}'''
 columns = 0
@@ -52,10 +51,6 @@ class JSONObject:
 class NoLoggingWSGIRequestHandler(WSGIRequestHandler):
   def log_message(self, format, *args):
     pass
-
-def print_there(x, y, text):
-  sys.stdout.write("\x1b7\x1b[%d;%df%s\x1b8" % (x, y, text))
-  sys.stdout.flush()
 
 base_url = ''
 template_404 = b'''POST {0}'''
@@ -96,6 +91,7 @@ class PathDispatcher:
 def process_event(e):
   global status
   global summary
+  vdu = 0
 
   epoch = e.event.commonEventHeader.lastEpochMicrosec
 
@@ -106,29 +102,26 @@ def process_event(e):
   if 'VDU1' in host or 'vdu1' in host: vdu = 1
   if 'VDU2' in host or 'vdu2' in host: vdu = 2
   if 'VDU3' in host or 'vdu3' in host: vdu = 3
-
+  
   domain = e.event.commonEventHeader.domain
 
-  if e.event.commonEventHeader.functionalRole == 'vHello_VES agent':
-    if domain == 'measurementsForVfScaling':
+  if domain == 'measurementsForVfScaling':
+    if vdu >= 1:
       aggregateCpuUsage = e.event.measurementsForVfScaling.aggregateCpuUsage
       requestRate = e.event.measurementsForVfScaling.requestRate
-      summary[vdu] = "VDU" + str(vdu) + " state=" + status[vdu] + ", tps=" + str(requestRate) + ", cpu=" + str(aggregateCpuUsage)
-      if monitor_mode == "c": print '{0} *** VDU{1} state={2}, tps={3}'.format(
-        report_time, vdu, status[vdu], str(requestRate))
+      summary[vdu] = host + ": state=" + status[vdu] + ", tps=" + str(requestRate) + ", cpu=" + str(aggregateCpuUsage)
+    else:
+      aggregateCpuUsage = e.event.measurementsForVfScalingFields.aggregateCpuUsage
+      summary[4] = host + ": cpu=" + str(aggregateCpuUsage)
 
-    if domain == 'fault':
-      alarmCondition = e.event.faultFields.alarmCondition
-      specificProblem = e.event.faultFields.specificProblem
+  for s in summary:
+    print '{0}'.format(s)
+
+  if domain == 'fault':
+    alarmCondition = e.event.faultFields.alarmCondition
+    specificProblem = e.event.faultFields.specificProblem
 #    status[vdu] = e.event.faultFields.vfStatus
-      status[vdu] = e.event.faultFields.specificProblem
-      if monitor_mode == "c": print '{0} *** VDU{1} state: {2}'.format(
-        report_time, vdu, status[vdu])
-
-# print_there only works if SSH'd to the VM manually - need to investigate
-#  print_there(1,columns-56,summary)
-    for s in summary:
-      print '{0}'.format(s)
+    status[vdu] = e.event.faultFields.specificProblem
 
 #--------------------------------------------------------------------------
 # Main monitoring and logging procedure

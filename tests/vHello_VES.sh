@@ -223,6 +223,14 @@ EOF
   vdu_url[3]="http://${vdu_ip[3]}"
   vdu_url[4]="http://${vdu_ip[4]}:30000/eventListener/v1"
 
+  echo "$0: $(date) start collectd agent on bare metal hypervisor hosts"
+  hosts=($(openstack hypervisor list | grep -v Hostname | grep -v "+" | awk '{print $4}'))
+  for host in ${hosts[@]}; do
+    ip=$(openstack hypervisor show $host | grep host_ip | awk '{print $4}')
+    scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/start.sh ubuntu@$ip:/home/ubuntu/start.sh
+    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu:ubuntu@$ip "nohup bash /home/ubuntu/start.sh collectd $ip ${vdu_ip[4]} hello world &"
+  done
+
   echo "$0: $(date) wait 30 seconds for server SSH to be available"
   sleep 30
 
@@ -233,18 +241,18 @@ EOF
   done
 
   echo "$0: $(date) start vHello webserver in VDU1 at ${vdu_ip[1]}"
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[1]} "bash /home/ubuntu/start.sh webserver ${vdu_id[1]} ${vdu_ip[4]} hello world; exit"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[1]} "nohup bash /home/ubuntu/start.sh webserver ${vdu_id[1]} ${vdu_ip[4]} hello world &"
 
   echo "$0: $(date) start vHello webserver in VDU2 at ${vdu_ip[2]}"
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[2]} "bash /home/ubuntu/start.sh webserver ${vdu_id[2]} ${vdu_ip[4]} hello world; exit"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[2]} "nohup bash /home/ubuntu/start.sh webserver ${vdu_id[2]} ${vdu_ip[4]} hello world &"
 
   echo "$0: $(date) start LB in VDU3 at ${vdu_ip[3]}"
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[3]} "bash /home/ubuntu/start.sh lb ${vdu_id[3]} ${vdu_ip[4]} hello world; exit"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[3]} "nohup bash /home/ubuntu/start.sh lb ${vdu_id[3]} ${vdu_ip[4]} hello world ${vdu_ip[1]} ${vdu_ip[2]} &"
 
   echo "$0: $(date) start Monitor in VDU4 at ${vdu_ip[4]}"
   # Replacing the default collector with monitor.py which has processing logic as well
   scp -i /tmp/tacker/vHello.pem -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/monitor.py ubuntu@${vdu_ip[4]}:/home/ubuntu/monitor.py
-  ssh -i /tmp/tacker/vHello.pem -t -t -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[4]} "bash /home/ubuntu/start.sh monitor ${vdu_id[4]} ${vdu_ip[4]} hello world; exit"
+  ssh -i /tmp/tacker/vHello.pem -t -t -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[4]} "bash /home/ubuntu/start.sh monitor ${vdu_id[4]} ${vdu_ip[4]} hello world"
 
 #  echo "$0: $(date) verify vHello server is running at http://${vdu_ip[3]}"
 #  apt-get install -y curl

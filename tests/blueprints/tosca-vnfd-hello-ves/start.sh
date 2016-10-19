@@ -21,15 +21,63 @@
 # How to use:
 # Intended to be invoked from vHello_VES.sh
 # $ bash start.sh type params
-#   type: type of VNF component [webserver|lb|monitor]
+#   type: type of VNF component [webserver|lb|monitor|collectd]
 #     webserver params: ID CollectorIP username password
 #     lb params:        ID CollectorIP username password app1_ip app2_ip
+#     collector params: ID CollectorIP username password
 #     collector params: ID CollectorIP username password
 #   ID: VM ID
 #   CollectorIP: IP address of the collector
 #   username: Username for Collector RESTful API authentication
 #   password: Password for Collector RESTful API authentication
 #   app1_ip app2_ip: address of the web servers
+
+setup_collectd () {
+  echo "$0: Install prerequisites"
+  sudo apt-get update
+  echo "$0: Install collectd plugin"
+  cd ~
+  git clone https://github.com/maryamtahhan/OpenStackBarcelonaDemo.git
+
+  sudo apt-get install -y collectd
+  sudo sed -i -- "s/FQDNLookup true/FQDNLookup false/" /etc/collectd/collectd.conf
+  sudo sed -i -- "s/#LoadPlugin cpu/LoadPlugin cpu/" /etc/collectd/collectd.conf
+  sudo sed -i -- "s/#LoadPlugin disk/LoadPlugin disk/" /etc/collectd/collectd.conf
+  sudo sed -i -- "s/#LoadPlugin interface/LoadPlugin interface/" /etc/collectd/collectd.conf
+  sudo sed -i -- "s/#LoadPlugin memory/LoadPlugin memory/" /etc/collectd/collectd.conf
+  cat <<EOF | sudo tee -a  /etc/collectd/collectd.conf
+<LoadPlugin python>
+  Globals true
+</LoadPlugin>
+<Plugin python>
+  ModulePath "/home/ubuntu/OpenStackBarcelonaDemo/ves_plugin/"
+  LogTraces true
+  Interactive false
+  Import "ves_plugin"
+<Module ves_plugin>
+  Domain "$collector_ip"
+  Port 30000
+  Path ""
+  Topic ""
+  UseHttps false
+  Username "hello"
+  Password "world"
+  FunctionalRole "Collectd VES Agent"
+</Module>
+</Plugin>
+LoadPlugin virt
+<Plugin virt>
+        Connection "qemu:///system"
+        RefreshInterval 60
+        HostnameFormat uuid
+</Plugin>
+<Plugin cpu>
+        ReportByCpu false
+        ValuesPercentage true
+</Plugin>
+EOF
+  sudo service collectd restart
+}
 
 setup_agent () {
   echo "$0: Install prerequisites"
@@ -59,38 +107,6 @@ setup_agent () {
   
   echo "$0: Start evel_demo agent"
   nohup ../output/x86_64/evel_demo --id $vm_id --fqdn $collector_ip --port 30000 --username $username --password $password > /dev/null 2>&1 &
-
-  echo "$0: Install collectd plugin"
-  cd ~
-  git clone https://github.com/maryamtahhan/OpenStackBarcelonaDemo.git
-  cd OpenStackBarcelonaDemo/ves_plugin
-  host=$(hostname)
-  sed -i -- "s/23380d70-2c71-4e35-99e2-f43f97e4ec65/$vm_id/g" ves_plugin.py
-  sed -i -- "s/cscf0001vm001abc001/$host/g" ves_plugin.py
-  sed -i -- "s/cscf0001vm001oam001/$host/g" ves_plugin.py
-  sed -i -- "s/SGW/$type/" ves_plugin.py
-  sed -i -- "s/reporting_entity_id = \"\"/reporting_entity_id = \"$vm_id\"/g" ves_plugin.py
-  sed -i -- "s/reporting_entity_name = \"cscf0001vm001oam001\"/reporting_entity_name = \"$host\"/g" ves_plugin.py 
-  sed -i -- "s/self.__username = ''/self.__username = 'hello'/g" ves_plugin.py
-  sed -i -- "s/self.__password = ''/self.__password = 'world'/g" ves_plugin.py
-  sed -i -- "s/self.__domain = '127.0.0.1'/self.__domain = '$collector_ip'/g" ves_plugin.py
-  sed -i -- "s/measurementForVfScaling/measurementsForVfScaling/g" ves_plugin.py
-
-  sudo apt-get install -y collectd
-  sudo sed -i -- "s/FQDNLookup true/FQDNLookup false/" /etc/collectd/collectd.conf
-  cat <<EOF | sudo tee -a  /etc/collectd/collectd.conf
-<LoadPlugin python>
-  Globals true
-</LoadPlugin>
-
-<Plugin python>
-  ModulePath "/home/ubuntu/OpenStackBarcelonaDemo/ves_plugin/"
-  LogTraces true
-  Interactive false
-  Import "ves_plugin"
-</Plugin>
-EOF
-  sudo service collectd restart
 }
 
 setup_webserver () {
