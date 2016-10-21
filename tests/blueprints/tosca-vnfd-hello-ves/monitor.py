@@ -34,11 +34,11 @@ import json
 import jsonschema
 import select
 
-report_time = ''
-requestRate = ''
 monitor_mode = "f"
-summary = ['***** Summary of key stats *****','','','','']
-status = ['','unknown','unknown','unknown','unknown']
+vdu_id = ['','','','']
+summary_e = ['***** Summary of key stats *****','','','']
+summary_c = ['Collectd agents:']
+status = ['','Started','Started','Started']
 base_url = ''
 template_404 = b'''POST {0}'''
 columns = 0
@@ -90,10 +90,14 @@ class PathDispatcher:
 #--------------------------------------------------------------------------
 def process_event(e):
   global status
-  global summary
+  global summary_e
+  global summary_c
+  global vdu_id
   vdu = 0
 
+
   epoch = e.event.commonEventHeader.lastEpochMicrosec
+  sourceId = e.event.commonEventHeader.sourceId
 
   report_time = time.strftime('%Y-%m-%d %H:%M:%S', 
                   time.localtime(int(epoch)/1000000))
@@ -107,17 +111,32 @@ def process_event(e):
 
   if domain == 'measurementsForVfScaling':
     if vdu >= 1:
-      aggregateCpuUsage = e.event.measurementsForVfScaling.aggregateCpuUsage
       requestRate = e.event.measurementsForVfScaling.requestRate
-      summary[vdu] = host + ": state=" + status[vdu] + ", tps=" + str(requestRate) + ", cpu=" + str(aggregateCpuUsage)
+      summary_e[vdu] = host + ": state=" + status[vdu] + ", tps=" + str(requestRate)
     else:
       aggregateCpuUsage = e.event.measurementsForVfScalingFields.aggregateCpuUsage
-      summary[4] = host + ": cpu=" + str(aggregateCpuUsage)
+      vNicUsageArray = e.event.measurementsForVfScalingFields.vNicUsageArray
+      s = ""
+      for i in range(1,len(vdu_id)):
+        if sourceId.upper() in vdu_id[i].upper():
+          s = "(VDU"+ str(i) + ") "
+      if s:
+        s += host + ": cpu=" + str(aggregateCpuUsage)
+        found = False
+        for i in range(1,len(summary_c)):
+          if host in summary_c[i]:
+            summary_c[i] = s
+            found = True
+            break
+        if not found:
+          summary_c.extend([s])
 
-  for s in summary:
+  for s in summary_e:
+    print '{0}'.format(s)
+  for s in summary_c:
     print '{0}'.format(s)
 
-  if domain == 'fault':
+  if domain == 'fault' and vdu >= 1:
     alarmCondition = e.event.faultFields.alarmCondition
     specificProblem = e.event.faultFields.specificProblem
 #    status[vdu] = e.event.faultFields.vfStatus
@@ -187,6 +206,7 @@ def ves_monitor(environ, start_response):
 def main(argv=None):
   global columns
   global rows
+
   a,b = os.popen('stty size', 'r').read().split()
   rows = int(a)
   columns = int(b)
@@ -252,6 +272,7 @@ def main(argv=None):
                                 vars=overrides)
     global vel_username
     global vel_password
+    global vdu_id
     vel_username = config.get(config_section,
                               'vel_username',
                               vars=overrides)
@@ -261,6 +282,18 @@ def main(argv=None):
     vel_schema_file = config.get(config_section,
                                  'schema_file',
                                  vars=overrides)
+    base_schema_file = config.get(config_section,
+                             'base_schema_file',
+                              vars=overrides)
+    vdu_id[1] = config.get(config_section,
+                           'vdu1_id',
+                            vars=overrides)
+    vdu_id[2] = config.get(config_section,
+                           'vdu2_id',
+                            vars=overrides)
+    vdu_id[3] = config.get(config_section,
+                           'vdu3_id',
+                            vars=overrides)
     base_schema_file = config.get(config_section,
                              'base_schema_file',
                               vars=overrides)

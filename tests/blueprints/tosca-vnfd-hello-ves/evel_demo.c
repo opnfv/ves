@@ -252,24 +252,8 @@ void measure_traffic() {
     if (measurement != NULL) {
       cpu();
       evel_measurement_type_set(measurement, "HTTP request rate");
-      evel_measurement_agg_cpu_use_set(measurement, loadavg);
-      evel_measurement_cpu_use_add(measurement, "cpu0", loadavg);
-      evel_measurement_fsys_use_add(measurement,"00-11-22",100.11, 100.22, 33,
-                                                           200.11, 200.22, 44);
-      evel_measurement_fsys_use_add(measurement,"33-44-55",300.11, 300.22, 55,
-                                                           400.11, 400.22, 66);
-
-      evel_measurement_latency_add(measurement, 0.0, 10.0, 20);
-      evel_measurement_latency_add(measurement, 10.0, 20.0, 30);
-
-      evel_measurement_vnic_use_add(measurement, "eth0", 1, 2,
-                                                         3, 4,
-                                                         5, 6,
-                                                         7, 8);
-      evel_measurement_vnic_use_add(measurement, "eth1", 11, 12,
-                                                         13, 14,
-                                                         15, 16,
-                                                         17, 18);
+//      evel_measurement_agg_cpu_use_set(measurement, loadavg);
+//      evel_measurement_cpu_use_add(measurement, "cpu0", loadavg);
 
       evel_rc = evel_post_event((EVENT_HEADER *)measurement);
       if (evel_rc != EVEL_SUCCESS) {

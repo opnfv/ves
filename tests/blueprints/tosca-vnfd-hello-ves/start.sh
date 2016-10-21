@@ -24,8 +24,7 @@
 #   type: type of VNF component [webserver|lb|monitor|collectd]
 #     webserver params: ID CollectorIP username password
 #     lb params:        ID CollectorIP username password app1_ip app2_ip
-#     collector params: ID CollectorIP username password
-#     collector params: ID CollectorIP username password
+#     monitor params: VDU1_ID VDU1_ID VDU1_ID username password
 #   ID: VM ID
 #   CollectorIP: IP address of the collector
 #   username: Username for Collector RESTful API authentication
@@ -33,6 +32,7 @@
 #   app1_ip app2_ip: address of the web servers
 
 setup_collectd () {
+  guest=$1
   echo "$0: Install prerequisites"
   sudo apt-get update
   echo "$0: Install collectd plugin"
@@ -45,7 +45,9 @@ setup_collectd () {
   sudo sed -i -- "s/#LoadPlugin disk/LoadPlugin disk/" /etc/collectd/collectd.conf
   sudo sed -i -- "s/#LoadPlugin interface/LoadPlugin interface/" /etc/collectd/collectd.conf
   sudo sed -i -- "s/#LoadPlugin memory/LoadPlugin memory/" /etc/collectd/collectd.conf
-  cat <<EOF | sudo tee -a  /etc/collectd/collectd.conf
+
+  if [[ "$guest" == true ]]: then
+    cat <<EOF | sudo tee -a  /etc/collectd/collectd.conf
 <LoadPlugin python>
   Globals true
 </LoadPlugin>
@@ -63,6 +65,46 @@ setup_collectd () {
   Username "hello"
   Password "world"
   FunctionalRole "Collectd VES Agent"
+  GuestRunning true
+</Module>
+</Plugin>
+<Plugin cpu>
+        ReportByCpu false
+        ValuesPercentage true
+</Plugin>
+LoadPlugin aggregation
+<Plugin aggregation>
+        <Aggregation>
+                Plugin "cpu"
+                Type "percent"
+                GroupBy "Host"
+                GroupBy "TypeInstance"
+                SetPlugin "cpu-aggregation"
+                CalculateAverage true
+        </Aggregation>
+</Plugin>
+LoadPlugin uuid
+EOF
+  else 
+    cat <<EOF | sudo tee -a  /etc/collectd/collectd.conf
+<LoadPlugin python>
+  Globals true
+</LoadPlugin>
+<Plugin python>
+  ModulePath "/home/ubuntu/OpenStackBarcelonaDemo/ves_plugin/"
+  LogTraces true
+  Interactive false
+  Import "ves_plugin"
+<Module ves_plugin>
+  Domain "$collector_ip"
+  Port 30000
+  Path ""
+  Topic ""
+  UseHttps false
+  Username "hello"
+  Password "world"
+  FunctionalRole "Collectd VES Agent"
+  GuestRunning $guest
 </Module>
 </Plugin>
 LoadPlugin virt
@@ -75,7 +117,18 @@ LoadPlugin virt
         ReportByCpu false
         ValuesPercentage true
 </Plugin>
-EOF
+LoadPlugin aggregation
+<Plugin aggregation>
+        <Aggregation>
+                Plugin "cpu"
+                Type "percent"
+                GroupBy "Host"
+                GroupBy "TypeInstance"
+                SetPlugin "cpu-aggregation"
+                CalculateAverage true
+        </Aggregation>
+</Plugin>EOF
+  fi
   sudo service collectd restart
 }
 
@@ -97,8 +150,9 @@ setup_agent () {
   cp ves/tests/blueprints/tosca-vnfd-hello-ves/evel_demo.c evel-library/code/evel_demo/evel_demo.c
   
   echo "$0: Update parameters and build agent demo"
+  # This sed command will add a line after the search line 
   sed -i -- "/api_secure,/{n;s/.*/                      \"$username\",/}" evel-library/code/evel_demo/evel_demo.c
-  sed -i -- "/\"hello\",/{n;s/.*/                      \"$password\",/}" evel-library/code/evel_demo/evel_demo.c
+  sed -i -- "/\"$username\",/{n;s/.*/                      \"$password\",/}" evel-library/code/evel_demo/evel_demo.c
 
   echo "$0: Build evel_demo agent"
   cd evel-library/bldjobs
@@ -107,6 +161,9 @@ setup_agent () {
   
   echo "$0: Start evel_demo agent"
   nohup ../output/x86_64/evel_demo --id $vm_id --fqdn $collector_ip --port 30000 --username $username --password $password > /dev/null 2>&1 &
+
+  echo "$0: Start collectd agent running in the VM"
+  setup_collectd true
 }
 
 setup_webserver () {
@@ -200,17 +257,29 @@ setup_monitor () {
   git clone https://github.com/att/evel-test-collector.git
   sed -i -- "s/vel_username = /vel_username = $username/" evel-test-collector/config/collector.conf
   sed -i -- "s/vel_password = /vel_password = $password/" evel-test-collector/config/collector.conf
+  sed -i -- "/vel_topic_name = /a vdu3_id = $vdu3_id" evel-test-collector/config/collector.conf
+  sed -i -- "/vel_topic_name = /a vdu2_id = $vdu2_id" evel-test-collector/config/collector.conf
+  sed -i -- "/vel_topic_name = /a vdu1_id = $vdu1_id" evel-test-collector/config/collector.conf
 
   python monitor.py --config evel-test-collector/config/collector.conf --section default 
 }
 
 type=$1
-vm_id=$2
-collector_ip=$3
-username=$4
-password=$5
-app1_ip=$6
-app2_ip=$7
+
+if [[ "$type" == "monitor" ]]; then
+  vdu1_id=$2
+  vdu2_id=$3
+  vdu3_id=$4
+  username=$5
+  password=$6
+else
+  vm_id=$2
+  collector_ip=$3
+  username=$4
+  password=$5
+  app1_ip=$6
+  app2_ip=$7
+fi
 
 setup_$type
 exit 0

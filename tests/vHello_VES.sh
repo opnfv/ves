@@ -252,7 +252,7 @@ EOF
   echo "$0: $(date) start Monitor in VDU4 at ${vdu_ip[4]}"
   # Replacing the default collector with monitor.py which has processing logic as well
   scp -i /tmp/tacker/vHello.pem -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/monitor.py ubuntu@${vdu_ip[4]}:/home/ubuntu/monitor.py
-  ssh -i /tmp/tacker/vHello.pem -t -t -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[4]} "bash /home/ubuntu/start.sh monitor ${vdu_id[4]} ${vdu_ip[4]} hello world"
+  ssh -i /tmp/tacker/vHello.pem -t -t -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[4]} "bash /home/ubuntu/start.sh monitor ${vdu_id[1]} ${vdu_id[2]} ${vdu_id[3]} hello world"
 
 #  echo "$0: $(date) verify vHello server is running at http://${vdu_ip[3]}"
 #  apt-get install -y curl
