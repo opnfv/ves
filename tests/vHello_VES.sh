@@ -316,10 +316,10 @@ traffic () {
 }
 
 pause () {
-  echo "$0: $(date) Pause the VNF (web server) in $1 for a minute to generate a state change fault report (Stopped)"
+  echo "$0: $(date) Pause the VNF (web server) in $1 for 30 seconds to generate a state change fault report (Stopped)"
   get_vdu_ip $1
   ssh -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$ip "sudo docker pause vHello"
-  sleep 60
+  sleep 20
   echo "$0: $(date) Unpausing the VNF to generate a state change fault report (Started)"
   ssh -i /tmp/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$ip "sudo docker unpause vHello"
 }
