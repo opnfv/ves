@@ -1,3 +1,4 @@
+
 #!/bin/bash
 # Copyright 2016 AT&T Intellectual Property, Inc
 #
@@ -46,7 +47,7 @@ setup_collectd () {
   sudo sed -i -- "s/#LoadPlugin interface/LoadPlugin interface/" /etc/collectd/collectd.conf
   sudo sed -i -- "s/#LoadPlugin memory/LoadPlugin memory/" /etc/collectd/collectd.conf
 
-  if [[ "$guest" == true ]]: then
+  if [[ "$guest" == true ]]; then
     cat <<EOF | sudo tee -a  /etc/collectd/collectd.conf
 <LoadPlugin python>
   Globals true
