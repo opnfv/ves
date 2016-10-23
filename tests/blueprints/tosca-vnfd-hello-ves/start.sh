@@ -1,4 +1,5 @@
 
+
 #!/bin/bash
 # Copyright 2016 AT&T Intellectual Property, Inc
 #
@@ -120,7 +121,7 @@ EOF
   Username "hello"
   Password "world"
   FunctionalRole "Collectd VES Agent"
-  GuestRunning $guest
+  GuestRunning false
 </Module>
 </Plugin>
 LoadPlugin virt
@@ -302,5 +303,5 @@ else
   app2_ip=$7
 fi
 
-setup_$type
+setup_$type $1
 exit 0
