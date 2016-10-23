@@ -95,6 +95,8 @@ setup () {
     echo "$0: $(date) Execute tacker-setup.sh in the container"
     sudo docker exec -it $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh tacker-cli setup
   else
+    echo "$0: $(date) Copy private key to the container (needed for later install steps)"
+    cp ~/.ssh/id_rsa /tmp/tacker/id_rsa
     echo "$0: $(date) Execute tacker-setup.sh in the container"
     sudo docker exec -i -t $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh tacker-cli setup
   fi
@@ -223,11 +225,18 @@ EOF
   vdu_url[3]="http://${vdu_ip[3]}"
   vdu_url[4]="http://${vdu_ip[4]}:30000/eventListener/v1"
 
+  if [[ -f /tmp/tacker/id_rsa ]]; then
+    echo "$0: $(date) setup private key for ssh to hypervisors"
+    cp -p /tmp/tacker/id_rsa ~/.ssh/id_rsa
+    chown root ~/.ssh/id_rsa
+    chmod 600 ~/.ssh/id_rsa
+  fi
+
   echo "$0: $(date) start collectd agent on bare metal hypervisor hosts"
   hosts=($(openstack hypervisor list | grep -v Hostname | grep -v "+" | awk '{print $4}'))
   for host in ${hosts[@]}; do
     ip=$(openstack hypervisor show $host | grep host_ip | awk '{print $4}')
-    if ("$OS_CLOUDNAME" == "overcloud"); then 
+    if [[ "$OS_CLOUDNAME" == "overcloud" ]]; then 
       u="heat-admin"
       p=""
     else 
@@ -235,7 +244,8 @@ EOF
       p=":ubuntu"
     fi
     scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/start.sh $u@$ip:/home/$u/start.sh
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $u$p@$ip "nohup bash /home/$u/start.sh collectd $ip ${vdu_ip[4]} hello world &"
+    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $u$p@$ip \
+      "nohup bash /home/$u/start.sh collectd $ip ${vdu_ip[4]} hello world > /dev/null 2>&1 &"
   done
 
   echo "$0: $(date) wait 30 seconds for server SSH to be available"
@@ -248,13 +258,16 @@ EOF
   done
 
   echo "$0: $(date) start vHello webserver in VDU1 at ${vdu_ip[1]}"
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[1]} "nohup bash /home/ubuntu/start.sh webserver ${vdu_id[1]} ${vdu_ip[4]} hello world > /dev/null 2>&1 &; exit"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+    ubuntu@${vdu_ip[1]} "nohup bash /home/ubuntu/start.sh webserver ${vdu_id[1]} ${vdu_ip[4]} hello world > /dev/null 2>&1 &"
 
   echo "$0: $(date) start vHello webserver in VDU2 at ${vdu_ip[2]}"
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[2]} "nohup bash /home/ubuntu/start.sh webserver ${vdu_id[2]} ${vdu_ip[4]} hello world > /dev/null 2>&1 &; exit"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+    ubuntu@${vdu_ip[2]} "nohup bash /home/ubuntu/start.sh webserver ${vdu_id[2]} ${vdu_ip[4]} hello world > /dev/null 2>&1 &"
 
   echo "$0: $(date) start LB in VDU3 at ${vdu_ip[3]}"
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[3]} "nohup bash /home/ubuntu/start.sh lb ${vdu_id[3]} ${vdu_ip[4]} hello world ${vdu_ip[1]} ${vdu_ip[2]} > /dev/null 2>&1 &; exit"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+    ubuntu@${vdu_ip[3]} "nohup bash /home/ubuntu/start.sh lb ${vdu_id[3]} ${vdu_ip[4]} hello world ${vdu_ip[1]} ${vdu_ip[2]} > /dev/null 2>&1 &"
 
   echo "$0: $(date) start Monitor in VDU4 at ${vdu_ip[4]}"
   # Replacing the default collector with monitor.py which has processing logic as well
