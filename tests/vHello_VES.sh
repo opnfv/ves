@@ -227,8 +227,15 @@ EOF
   hosts=($(openstack hypervisor list | grep -v Hostname | grep -v "+" | awk '{print $4}'))
   for host in ${hosts[@]}; do
     ip=$(openstack hypervisor show $host | grep host_ip | awk '{print $4}')
-    scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/start.sh ubuntu@$ip:/home/ubuntu/start.sh
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu:ubuntu@$ip "nohup bash /home/ubuntu/start.sh collectd $ip ${vdu_ip[4]} hello world &"
+    if ("$OS_CLOUDNAME" == "overcloud"); then 
+      u="heat-admin"
+      p=""
+    else 
+      u="ubuntu"
+      p=":ubuntu"
+    fi
+    scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-ves/start.sh $u@$ip:/home/$u/start.sh
+    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $u$p@$ip "nohup bash /home/$u/start.sh collectd $ip ${vdu_ip[4]} hello world &"
   done
 
   echo "$0: $(date) wait 30 seconds for server SSH to be available"
@@ -241,13 +248,13 @@ EOF
   done
 
   echo "$0: $(date) start vHello webserver in VDU1 at ${vdu_ip[1]}"
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[1]} "nohup bash /home/ubuntu/start.sh webserver ${vdu_id[1]} ${vdu_ip[4]} hello world &"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[1]} "nohup bash /home/ubuntu/start.sh webserver ${vdu_id[1]} ${vdu_ip[4]} hello world > /dev/null 2>&1 &; exit"
 
   echo "$0: $(date) start vHello webserver in VDU2 at ${vdu_ip[2]}"
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[2]} "nohup bash /home/ubuntu/start.sh webserver ${vdu_id[2]} ${vdu_ip[4]} hello world &"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[2]} "nohup bash /home/ubuntu/start.sh webserver ${vdu_id[2]} ${vdu_ip[4]} hello world > /dev/null 2>&1 &; exit"
 
   echo "$0: $(date) start LB in VDU3 at ${vdu_ip[3]}"
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[3]} "nohup bash /home/ubuntu/start.sh lb ${vdu_id[3]} ${vdu_ip[4]} hello world ${vdu_ip[1]} ${vdu_ip[2]} &"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[3]} "nohup bash /home/ubuntu/start.sh lb ${vdu_id[3]} ${vdu_ip[4]} hello world ${vdu_ip[1]} ${vdu_ip[2]} > /dev/null 2>&1 &; exit"
 
   echo "$0: $(date) start Monitor in VDU4 at ${vdu_ip[4]}"
   # Replacing the default collector with monitor.py which has processing logic as well

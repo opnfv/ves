@@ -35,20 +35,35 @@
 setup_collectd () {
   guest=$1
   echo "$0: Install prerequisites"
-  sudo apt-get update
-  echo "$0: Install collectd plugin"
-  cd ~
-  git clone https://github.com/maryamtahhan/OpenStackBarcelonaDemo.git
+  dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
+  if [ "$dist" == "Ubuntu" ]; then 
+    conf="/etc/collectd/collectd.conf"
+  else
+    conf="/etc/collectd.conf"
+  fi
+	
+  if [[ ! -d ~/OpenStackBarcelonaDemo ]]; then
+    if [ "$dist" == "Ubuntu" ]; then
+      sudo apt-get update
+      sudo apt-get install -y collectd
+    else 
+      sudo yum update -y
+      sudo yum install -y epel-release
+      sudo yum install -y collectd
+  	fi
+    cd ~
+	
+    echo "$0: Install VES collectd plugin"
+    git clone https://github.com/maryamtahhan/OpenStackBarcelonaDemo.git
 
-  sudo apt-get install -y collectd
-  sudo sed -i -- "s/FQDNLookup true/FQDNLookup false/" /etc/collectd/collectd.conf
-  sudo sed -i -- "s/#LoadPlugin cpu/LoadPlugin cpu/" /etc/collectd/collectd.conf
-  sudo sed -i -- "s/#LoadPlugin disk/LoadPlugin disk/" /etc/collectd/collectd.conf
-  sudo sed -i -- "s/#LoadPlugin interface/LoadPlugin interface/" /etc/collectd/collectd.conf
-  sudo sed -i -- "s/#LoadPlugin memory/LoadPlugin memory/" /etc/collectd/collectd.conf
+    sudo sed -i -- "s/FQDNLookup true/FQDNLookup false/" /etc/collectd/collectd.conf
+    sudo sed -i -- "s/#LoadPlugin cpu/LoadPlugin cpu/" /etc/collectd/collectd.conf
+    sudo sed -i -- "s/#LoadPlugin disk/LoadPlugin disk/" /etc/collectd/collectd.conf
+    sudo sed -i -- "s/#LoadPlugin interface/LoadPlugin interface/" /etc/collectd/collectd.conf
+    sudo sed -i -- "s/#LoadPlugin memory/LoadPlugin memory/" /etc/collectd/collectd.conf
 
-  if [[ "$guest" == true ]]; then
-    cat <<EOF | sudo tee -a  /etc/collectd/collectd.conf
+    if [[ "$guest" == true ]]; then
+      cat <<EOF | sudo tee -a $conf
 <LoadPlugin python>
   Globals true
 </LoadPlugin>
@@ -86,8 +101,8 @@ LoadPlugin aggregation
 </Plugin>
 LoadPlugin uuid
 EOF
-  else 
-    cat <<EOF | sudo tee -a  /etc/collectd/collectd.conf
+    else 
+      cat <<EOF | sudo tee -a $conf
 <LoadPlugin python>
   Globals true
 </LoadPlugin>
@@ -128,7 +143,12 @@ LoadPlugin aggregation
                 SetPlugin "cpu-aggregation"
                 CalculateAverage true
         </Aggregation>
-</Plugin>EOF
+</Plugin>
+EOF
+    fi
+  else
+     echo "$0: Update collectd conf with current Collector IP"
+     sudo sed -i -- "s/  Domain \".*\"/  Domain \"$collector_ip\"/" $conf
   fi
   sudo service collectd restart
 }
