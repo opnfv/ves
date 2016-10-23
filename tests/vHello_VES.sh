@@ -297,6 +297,31 @@ stop() {
   fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done
   sg=($(openstack security group list|grep vHello|awk '{print $2}'))
   for id in ${sg[@]}; do try 10 5 "openstack security group delete ${id}";  done
+	
+  echo "$0: $(date) remove collectd agent on bare metal hypervisor hosts"
+  hosts=($(openstack hypervisor list | grep -v Hostname | grep -v "+" | awk '{print $4}'))
+  for host in ${hosts[@]}; do
+    ip=$(openstack hypervisor show $host | grep host_ip | awk '{print $4}')
+    if [[ "$OS_CLOUDNAME" == "overcloud" ]]; then 
+      u="heat-admin"
+      p=""
+    else 
+      u="ubuntu"
+      p=":ubuntu"
+    fi
+    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $u$p@$ip <<'EOF'
+if [[ $USER == "ubuntu" ]]; then
+  sudo service collectd stop
+  sudo apt-get remove -y collectd
+  sudo rm /etc/collectd/collectd.conf
+else
+  sudo service collectd stop
+  sudo yum remove -y collectd
+  sudo rm /etc/collectd.conf
+fi
+EOF
+  rm -rf $HOME/OpenStackBarcelonaDemo
+  done
 }
 
 #

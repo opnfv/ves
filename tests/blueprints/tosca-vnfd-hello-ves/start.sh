@@ -1,5 +1,3 @@
-
-
 #!/bin/bash
 # Copyright 2016 AT&T Intellectual Property, Inc
 #
@@ -43,28 +41,28 @@ setup_collectd () {
     conf="/etc/collectd.conf"
   fi
 	
-  if [[ ! -d ~/OpenStackBarcelonaDemo ]]; then
-    if [ "$dist" == "Ubuntu" ]; then
-      sudo apt-get update
-      sudo apt-get install -y collectd
-    else 
-      sudo yum update -y
-      sudo yum install -y epel-release
-      sudo yum install -y collectd
-  	fi
-    cd ~
+  if [ "$dist" == "Ubuntu" ]; then
+    sudo apt-get update
+    sudo apt-get install -y collectd
+  else 
+    sudo yum update -y
+    sudo yum install -y epel-release
+    sudo yum install -y collectd
+    sudo yum install -y collectd-virt
+  fi
+  cd ~
 	
-    echo "$0: Install VES collectd plugin"
-    git clone https://github.com/maryamtahhan/OpenStackBarcelonaDemo.git
+  echo "$0: Install VES collectd plugin"
+  git clone https://github.com/maryamtahhan/OpenStackBarcelonaDemo.git
 
-    sudo sed -i -- "s/FQDNLookup true/FQDNLookup false/" /etc/collectd/collectd.conf
-    sudo sed -i -- "s/#LoadPlugin cpu/LoadPlugin cpu/" /etc/collectd/collectd.conf
-    sudo sed -i -- "s/#LoadPlugin disk/LoadPlugin disk/" /etc/collectd/collectd.conf
-    sudo sed -i -- "s/#LoadPlugin interface/LoadPlugin interface/" /etc/collectd/collectd.conf
-    sudo sed -i -- "s/#LoadPlugin memory/LoadPlugin memory/" /etc/collectd/collectd.conf
+  sudo sed -i -- "s/FQDNLookup true/FQDNLookup false/" /etc/collectd/collectd.conf
+  sudo sed -i -- "s/#LoadPlugin cpu/LoadPlugin cpu/" /etc/collectd/collectd.conf
+  sudo sed -i -- "s/#LoadPlugin disk/LoadPlugin disk/" /etc/collectd/collectd.conf
+  sudo sed -i -- "s/#LoadPlugin interface/LoadPlugin interface/" /etc/collectd/collectd.conf
+  sudo sed -i -- "s/#LoadPlugin memory/LoadPlugin memory/" /etc/collectd/collectd.conf
 
-    if [[ "$guest" == true ]]; then
-      cat <<EOF | sudo tee -a $conf
+  if [[ "$guest" == true ]]; then
+    cat <<EOF | sudo tee -a $conf
 <LoadPlugin python>
   Globals true
 </LoadPlugin>
@@ -102,13 +100,13 @@ LoadPlugin aggregation
 </Plugin>
 LoadPlugin uuid
 EOF
-    else 
-      cat <<EOF | sudo tee -a $conf
+  else 
+    cat <<EOF | sudo tee -a $conf
 <LoadPlugin python>
   Globals true
 </LoadPlugin>
 <Plugin python>
-  ModulePath "/home/ubuntu/OpenStackBarcelonaDemo/ves_plugin/"
+  ModulePath "/home/$USER/OpenStackBarcelonaDemo/ves_plugin/"
   LogTraces true
   Interactive false
   Import "ves_plugin"
@@ -146,10 +144,6 @@ LoadPlugin aggregation
         </Aggregation>
 </Plugin>
 EOF
-    fi
-  else
-     echo "$0: Update collectd conf with current Collector IP"
-     sudo sed -i -- "s/  Domain \".*\"/  Domain \"$collector_ip\"/" $conf
   fi
   sudo service collectd restart
 }
