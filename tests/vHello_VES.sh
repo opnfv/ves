@@ -310,7 +310,8 @@ stop() {
       p=":ubuntu"
     fi
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $u$p@$ip <<'EOF'
-if [[ $USER == "ubuntu" ]]; then
+dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
+if [ "$dist" == "Ubuntu" ]; then 
   sudo service collectd stop
   sudo apt-get remove -y collectd
   sudo rm /etc/collectd/collectd.conf
@@ -319,8 +320,8 @@ else
   sudo yum remove -y collectd
   sudo rm /etc/collectd.conf
 fi
+rm -rf $HOME/OpenStackBarcelonaDemo
 EOF
-  rm -rf $HOME/OpenStackBarcelonaDemo
   done
 }
 
