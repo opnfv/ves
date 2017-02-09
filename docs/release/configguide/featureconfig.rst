@@ -3,30 +3,20 @@
 .. http://creativecommons.org/licenses/by/4.0
 .. (c) 2015-2017 AT&T Intellectual Property, Inc
 
-VES Configuration
-====================
+=======================
+OPNFV VES Configuration
+=======================
 
+.. contents::
+   :depth: 3
+   :local:
 
-Pre-configuration Activities
-----------------------------
-None required.
-
-Hardware Configuration
+Hardware configuration
 ----------------------
-There is no specific hardware configuration required for the VES project.
-
-Feature Configuration
----------------------
-
-OPNFV Installer Support
-.......................
-
 There is currently no OPNFV installer support for the components used by the VES project.
 
-
-Manual Installation
-...................
-
+Feature configuration
+---------------------
 The VES test scripts automatically install VES components. Instructions are included in the following scripts:
 
   * ves/tests/vHello_VES.sh
@@ -34,5 +24,3 @@ The VES test scripts automatically install VES components. Instructions are incl
 Prerequisites to using vHello_VES:
 
   * OPFNV installed via JOID or Apex
-
-

@@ -3,16 +3,11 @@
 .. http://creativecommons.org/licenses/by/4.0
 .. (c) 2015-2017 AT&T Intellectual Property, Inc
 
-Release Notes
-=============
+=================
+OPNFV VES Testing
+=================
 
-VES Danube Release Scope
----------------------------
+.. toctree::
+   :maxdepth: 1
 
-OPNFV Danube includes:
-
-  * Further enhancements of VES test scripts
-
-
-
-
+   usecases.rst
