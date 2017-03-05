@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "dabed58f_f3d83755",
+        "filename": "tests/vHello_VES.sh",
+        "patchSetId": 2
+      },
+      "lineNbr": 270,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-03-05T19:19:17Z",
+      "side": 1,
+      "message": "are these two VDU URLs supposed to be the same?",
+      "range": {
+        "startLine": 269,
+        "startChar": 1,
+        "endLine": 270,
+        "endChar": 34
+      },
+      "revId": "1bcb892eb0071694b0310d63a972bc07e2dc272c",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    }
+  ]
+}
