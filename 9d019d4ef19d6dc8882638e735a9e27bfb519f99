@@ -1,0 +1,67 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "dabed58f_53202349",
+        "filename": "tests/vHello_VES.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 268,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-03-05T18:29:56Z",
+      "side": 1,
+      "message": "do you mean ${vdu_ip[2]}  ?",
+      "range": {
+        "startLine": 268,
+        "startChar": 1,
+        "endLine": 268,
+        "endChar": 34
+      },
+      "revId": "9d019d4ef19d6dc8882638e735a9e27bfb519f99",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "dabed58f_b32b9f2f",
+        "filename": "tests/vHello_VES_3Node.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 20,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-03-05T18:29:56Z",
+      "side": 1,
+      "message": "Are you going to add that this script assumes you have either a JOID or APEX OPNFV installation? you make a juju call on line 93",
+      "revId": "9d019d4ef19d6dc8882638e735a9e27bfb519f99",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "dabed58f_93269b67",
+        "filename": "tests/vHello_VES_3Node.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 224,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-03-05T18:29:56Z",
+      "side": 1,
+      "message": "do you mean [2] ?",
+      "range": {
+        "startLine": 224,
+        "startChar": 21,
+        "endLine": 224,
+        "endChar": 34
+      },
+      "revId": "9d019d4ef19d6dc8882638e735a9e27bfb519f99",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    }
+  ]
+}
