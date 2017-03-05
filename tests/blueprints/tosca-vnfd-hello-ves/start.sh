@@ -21,15 +21,13 @@
 # How to use:
 # Intended to be invoked from vHello_VES.sh
 # $ bash start.sh type params
-#   type: type of VNF component [webserver|lb|monitor|collectd]
-#     webserver params: ID CollectorIP username password
-#     lb params:        ID CollectorIP username password app1_ip app2_ip
+#   type: type of VNF component [monitor|collectd]
+#     collector params: ID CollectorIP username password
 #     monitor params: VDU1_ID VDU1_ID VDU1_ID username password
 #   ID: VM ID
 #   CollectorIP: IP address of the collector
 #   username: Username for Collector RESTful API authentication
 #   password: Password for Collector RESTful API authentication
-#   app1_ip app2_ip: address of the web servers
 
 setup_collectd () {
   guest=$1
@@ -53,13 +51,13 @@ setup_collectd () {
   cd ~
 	
   echo "$0: Install VES collectd plugin"
-  git clone https://github.com/maryamtahhan/OpenStackBarcelonaDemo.git
+  git clone https://git.opnfv.org/barometer
 
-  sudo sed -i -- "s/FQDNLookup true/FQDNLookup false/" /etc/collectd/collectd.conf
-  sudo sed -i -- "s/#LoadPlugin cpu/LoadPlugin cpu/" /etc/collectd/collectd.conf
-  sudo sed -i -- "s/#LoadPlugin disk/LoadPlugin disk/" /etc/collectd/collectd.conf
-  sudo sed -i -- "s/#LoadPlugin interface/LoadPlugin interface/" /etc/collectd/collectd.conf
-  sudo sed -i -- "s/#LoadPlugin memory/LoadPlugin memory/" /etc/collectd/collectd.conf
+  sudo sed -i -- "s/FQDNLookup true/FQDNLookup false/" $conf
+  sudo sed -i -- "s/#LoadPlugin cpu/LoadPlugin cpu/" $conf
+  sudo sed -i -- "s/#LoadPlugin disk/LoadPlugin disk/" $conf
+  sudo sed -i -- "s/#LoadPlugin interface/LoadPlugin interface/" $conf
+  sudo sed -i -- "s/#LoadPlugin memory/LoadPlugin memory/" $conf
 
   if [[ "$guest" == true ]]; then
     cat <<EOF | sudo tee -a $conf
@@ -67,7 +65,7 @@ setup_collectd () {
   Globals true
 </LoadPlugin>
 <Plugin python>
-  ModulePath "/home/ubuntu/OpenStackBarcelonaDemo/ves_plugin/"
+  ModulePath "/home/$USER/barometer/3rd_party/collectd-ves-plugin/ves_plugin/"
   LogTraces true
   Interactive false
   Import "ves_plugin"
@@ -106,7 +104,7 @@ EOF
   Globals true
 </LoadPlugin>
 <Plugin python>
-  ModulePath "/home/$USER/OpenStackBarcelonaDemo/ves_plugin/"
+  ModulePath "/home/$USER/barometer/3rd_party/collectd-ves-plugin/ves_plugin/"
   LogTraces true
   Interactive false
   Import "ves_plugin"
@@ -143,6 +141,7 @@ LoadPlugin aggregation
                 CalculateAverage true
         </Aggregation>
 </Plugin>
+LoadPlugin uuid
 EOF
   fi
   sudo service collectd restart
@@ -182,80 +181,6 @@ setup_agent () {
   setup_collectd true
 }
 
-setup_webserver () {
-  echo "$0: Setup website and dockerfile"
-  mkdir ~/www
-  mkdir ~/www/html
-
-  # ref: https://hub.docker.com/_/nginx/
-  cat > ~/www/Dockerfile <<EOM
-FROM nginx
-COPY html /usr/share/nginx/html
-EOM
-
-  host=$(hostname)
-  cat > ~/www/html/index.html <<EOM
-<!DOCTYPE html>
-<html>
-<head>
-<title>Hello World!</title>
-<meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1"/>
-<style>
-body { width: 100%; background-color: white; color: black; padding: 0px; margin: 0px; font-family: sans-serif; font-size:100%; }
-</style>
-</head>
-<body>
-Hello World!<br>
-Welcome to OPNFV @ $host!</large><br/>
-<a href="http://wiki.opnfv.org"><img src="https://www.opnfv.org/sites/all/themes/opnfv/logo.png"></a>
-</body></html>
-EOM
-
-  wget https://git.opnfv.org/cgit/ves/plain/tests/blueprints/tosca-vnfd-hello-ves/favicon.ico -O  ~/www/html/favicon.ico
-
-  echo "$0: Install docker"
-  # Per https://docs.docker.com/engine/installation/linux/ubuntulinux/
-  # Per https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-on-ubuntu-16-04
-  sudo apt-get install apt-transport-https ca-certificates
-  sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-  echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" | sudo tee /etc/apt/sources.list.d/docker.list
-  sudo apt-get update
-  sudo apt-get purge lxc-docker
-  sudo apt-get install -y linux-image-extra-$(uname -r) linux-image-extra-virtual
-  sudo apt-get install -y docker-engine
-
-  echo "$0: Get nginx container and start website in docker"
-  # Per https://hub.docker.com/_/nginx/
-  sudo docker pull nginx
-  cd ~/www
-  sudo docker build -t vhello .
-  sudo docker run --name vHello -d -p 80:80 vhello
-
-  echo "$0: setup VES agents"
-  setup_agent
-
-  # Debug hints
-  # id=$(sudo ls /var/lib/docker/containers)
-  # sudo tail -f /var/lib/docker/containers/$id/$id-json.log \
-  }
-
-setup_lb () {
-  echo "$0: setup VES load balancer"
-  echo "$0: install dependencies"
-  sudo apt-get update
-
-  echo "$0: Setup iptables rules"
-  echo "1" | sudo tee /proc/sys/net/ipv4/ip_forward
-  sudo sysctl net.ipv4.ip_forward=1
-  sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -m state --state NEW -m statistic --mode nth --every 2 --packet 0 -j DNAT --to-destination $app1_ip:80
-  sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -m state --state NEW -m statistic --mode nth --every 2 --packet 0 -j DNAT --to-destination $app2_ip:80
-  sudo iptables -t nat -A POSTROUTING -j MASQUERADE
-  # debug hints: list rules (sudo iptables -S -t nat), flush (sudo iptables -F -t nat)
-
-  echo "$0: setup VES agents"
-  setup_agent
-}
-
 setup_monitor () {
   echo "$0: setup VES Monitor"
   echo "$0: install dependencies"
@@ -277,7 +202,7 @@ setup_monitor () {
   sed -i -- "/vel_topic_name = /a vdu2_id = $vdu2_id" evel-test-collector/config/collector.conf
   sed -i -- "/vel_topic_name = /a vdu1_id = $vdu1_id" evel-test-collector/config/collector.conf
 
-  python monitor.py --config evel-test-collector/config/collector.conf --section default 
+#  python monitor.py --config evel-test-collector/config/collector.conf --section default 
 }
 
 type=$1
@@ -293,8 +218,6 @@ else
   collector_ip=$3
   username=$4
   password=$5
-  app1_ip=$6
-  app2_ip=$7
 fi
 
 setup_$type $1
