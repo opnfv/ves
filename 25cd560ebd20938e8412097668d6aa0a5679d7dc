@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "dabed58f_134e2bc2",
+        "filename": "tests/vHello_VES_3Node.sh",
+        "patchSetId": 4
+      },
+      "lineNbr": 225,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-03-06T02:24:40Z",
+      "side": 1,
+      "message": "vdu_url 2 and 3 are set to the same vdu_ip",
+      "range": {
+        "startLine": 224,
+        "startChar": 0,
+        "endLine": 225,
+        "endChar": 34
+      },
+      "revId": "25cd560ebd20938e8412097668d6aa0a5679d7dc",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    }
+  ]
+}
