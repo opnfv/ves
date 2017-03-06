@@ -19,6 +19,61 @@ topology_template:
         image: models-xenial-server
         availability_zone: nova
         mgmt_driver: noop
+        config_drive: true
+        user_data_format: RAW
+        user_data: |
+          #!/bin/bash
+          set -x
+          mkdir /home/ubuntu
+          chown -R ubuntu /home/ubuntu
+          mkdir /home/ubuntu/.ssh
+          cat << EOM >/home/ubuntu/.ssh/authorized_keys
+          <pubkey>
+          EOM
+          sudo mount /dev/sr0 /mnt/
+          mkdir /tmp/www
+          cd /tmp/www
+          mkdir html
+          cat >Dockerfile <<EOM
+          FROM nginx
+          COPY html /usr/share/nginx/html
+          EOM
+          host=$(hostname)
+          id=$(cut -d ',' -f 3 /mnt/openstack/latest/meta_data.json)
+          cat <<EOM >html/index.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+          <title>Hello World!</title>
+          <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1"/>
+          <style>
+          body { width: 100%; background-color: white; color: black; padding: 0px; margin: 0px; font-family: sans-serif; font-size:100%; }
+          </style>
+          </head>
+          <body>
+          <large>Welcome to OPNFV @ $host!</large><br/>
+          <a href="http://wiki.opnfv.org"><img src="https://www.opnfv.org/sites/all/themes/opnfv/logo.png"></a>
+          <div>
+          <p>Instance ID fom config drive file /mnt/openstack/latest/meta_data.json></p>
+          <pre>
+          $id
+          </pre>
+          <p>Server setup completed at $(date)</p>
+          </div>
+          </body></html>
+          EOM
+          wget -O /tmp/www/html/favicon.ico https://git.opnfv.org/models/plain/tests/blueprints/tosca-vnfd-3node-tacker/favicon.ico
+          sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
+          curl -fsSL https://apt.dockerproject.org/gpg | sudo apt-key add -
+          sudo apt-key update
+          echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" >~/dockerrepo
+          sudo tee -a /etc/apt/sources.list.d/docker.list ~/dockerrepo
+          sudo add-apt-repository "deb https://apt.dockerproject.org/repo/ ubuntu-xenial main"
+          sudo apt-get update
+          sudo apt-get install -y docker-engine
+          sudo docker pull nginx
+          sudo docker build -t vhello .
+          sudo docker run --name vHello -d -p 80:80 vhello
         config: |
           param0: key1
           param1: key2
@@ -56,6 +111,61 @@ topology_template:
         image: models-xenial-server
         availability_zone: nova
         mgmt_driver: noop
+        config_drive: true
+        user_data_format: RAW
+        user_data: |
+          #!/bin/bash
+          set -x
+          mkdir /home/ubuntu
+          chown -R ubuntu /home/ubuntu
+          mkdir /home/ubuntu/.ssh
+          cat << EOM >/home/ubuntu/.ssh/authorized_keys
+          <pubkey>
+          EOM
+          sudo mount /dev/sr0 /mnt/
+          mkdir /tmp/www
+          cd /tmp/www
+          mkdir html
+          cat >Dockerfile <<EOM
+          FROM nginx
+          COPY html /usr/share/nginx/html
+          EOM
+          host=$(hostname)
+          id=$(cut -d ',' -f 3 /mnt/openstack/latest/meta_data.json)
+          cat <<EOM >html/index.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+          <title>Hello World!</title>
+          <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1"/>
+          <style>
+          body { width: 100%; background-color: white; color: black; padding: 0px; margin: 0px; font-family: sans-serif; font-size:100%; }
+          </style>
+          </head>
+          <body>
+          <large>Welcome to OPNFV @ $host!</large><br/>
+          <a href="http://wiki.opnfv.org"><img src="https://www.opnfv.org/sites/all/themes/opnfv/logo.png"></a>
+          <div>
+          <p>Instance ID fom config drive file /mnt/openstack/latest/meta_data.json></p>
+          <pre>
+          $id
+          </pre>
+          <p>Server setup completed at $(date)</p>
+          </div>
+          </body></html>
+          EOM
+          wget -O /tmp/www/html/favicon.ico https://git.opnfv.org/models/plain/tests/blueprints/tosca-vnfd-3node-tacker/favicon.ico
+          sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
+          curl -fsSL https://apt.dockerproject.org/gpg | sudo apt-key add -
+          sudo apt-key update
+          echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" >~/dockerrepo
+          sudo tee -a /etc/apt/sources.list.d/docker.list ~/dockerrepo
+          sudo add-apt-repository "deb https://apt.dockerproject.org/repo/ ubuntu-xenial main"
+          sudo apt-get update
+          sudo apt-get install -y docker-engine
+          sudo docker pull nginx
+          sudo docker build -t vhello .
+          sudo docker run --name vHello -d -p 80:80 vhello
         config: |
           param0: key1
           param1: key2
@@ -93,6 +203,32 @@ topology_template:
         image: models-xenial-server
         availability_zone: nova
         mgmt_driver: noop
+        user_data_format: RAW
+        user_data: |
+          #!/bin/bash
+          set -x
+          mkdir /home/ubuntu
+          chown -R ubuntu /home/ubuntu
+          mkdir /home/ubuntu/.ssh
+          cat << EOM >/home/ubuntu/.ssh/authorized_keys
+          <pubkey>
+          EOM
+          cat << EOF >/tmp/setup.sh
+          echo "1" | sudo tee /proc/sys/net/ipv4/ip_forward
+          sudo sysctl net.ipv4.ip_forward=1
+          sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -m state \\
+          --state NEW -m statistic --mode nth --every 2 --packet 0 \\
+          -j DNAT --to-destination <vdu1_ip>:80
+          sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -m state \\
+          --state NEW -m statistic --mode nth --every 2 --packet 0 \\
+          -j DNAT --to-destination <vdu2_ip>:80
+          sudo iptables -t nat -A POSTROUTING -j MASQUERADE
+          EOF
+          bash /tmp/setup.sh
+        config: |
+          param0: key1
+          param1: key2
+
         config: |
           param0: key1
           param1: key2
@@ -130,6 +266,16 @@ topology_template:
         image: models-xenial-server
         availability_zone: nova
         mgmt_driver: noop
+        user_data_format: RAW
+        user_data: |
+          #!/bin/bash
+          set -x
+          mkdir /home/ubuntu
+          chown -R ubuntu /home/ubuntu
+          mkdir /home/ubuntu/.ssh
+          cat << EOM >/home/ubuntu/.ssh/authorized_keys
+          <pubkey>
+          EOM
         config: |
           param0: key1
           param1: key2
