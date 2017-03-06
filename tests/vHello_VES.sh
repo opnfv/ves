@@ -42,13 +42,13 @@
 #     branch: OpenStack branch to install (default: master)
 #   $ bash vHello_VES.sh start
 #     start: install blueprint and run test
-#   $ bash vHello_VES.sh start_collectd|stop_collectd <ip> <user> <monitor_ip>
+#   $ bash vHello_VES.sh start_collectd|stop_collectd <ip> <user> <hpv_ip>
 #     start_collectd: install and start collectd daemon on hypervisor
 #     stop_collectd: stop and uninstall collectd daemon on hypervisor
 #     <ip>: hypervisor ip 
 #     <user>: username on hypervisor hosts, for ssh (user must be setup for 
 #       key-based auth on the hosts)
-#     <monitor_ip>" IP address of VDU4 (monitor VM)
+#     <hpv_ip>" IP address of hypervisor to start collectd daemon on
 #   $ bash vHello_VES.sh monitor <monitor_ip>
 #     monitor: attach to the collector VM and run the VES Monitor
 #     <monitor_ip>" IP address of VDU4 (monitor VM)
@@ -503,7 +503,6 @@ case "$1" in
     pass
     ;;
   clean)
-    stop_collectd $1
     echo "$0: $(date) Uninstall Tacker and test environment"
     sudo docker exec -it tacker /bin/bash /opt/tacker/tacker-setup.sh clean
     sudo docker stop tacker
@@ -542,13 +541,13 @@ case "$1" in
      start: install blueprint and run test
      <user>: username on hypervisor hosts, for ssh (user must be setup for 
        key-based auth on the hosts)
-   $ bash vHello_VES.sh start_collectd|stop_collectd <ip> <user> <monitor_ip>
+   $ bash vHello_VES.sh start_collectd|stop_collectd <ip> <user> <hpv_ip>
      start_collectd: install and start collectd daemon on hypervisor
      stop_collectd: stop and uninstall collectd daemon on hypervisor
      <ip>: hypervisor ip 
      <user>: username on hypervisor hosts, for ssh (user must be setup for 
        key-based auth on the hosts)
-     <monitor_ip>" IP address of VDU4 (monitor VM)
+     <hpv_ip>" IP address of hypervisor to start collectd daemon on
    $ bash vHello_VES.sh monitor <monitor_ip>
      monitor: attach to the collector VM and run the VES Monitor
      <monitor_ip>" IP address of VDU4 (monitor VM)
