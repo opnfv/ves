@@ -196,8 +196,10 @@ setup_monitor () {
   sudo chown ubuntu /home/ubuntu/
   cd /home/ubuntu/
   git clone https://github.com/att/evel-test-collector.git
-  sed -i -- "s/vel_username = /vel_username = $username/" evel-test-collector/config/collector.conf
-  sed -i -- "s/vel_password = /vel_password = $password/" evel-test-collector/config/collector.conf
+  sed -i -- "s/vel_username = /vel_username = $1/" evel-test-collector/config/collector.conf
+  sed -i -- "s/vel_password = /vel_password = $2/" evel-test-collector/config/collector.conf
+  sed -i -- "s~vel_path = vendor_event_listener/~vel_path = ~" evel-test-collector/config/collector.conf
+  sed -i -- "s/vel_topic_name = example_vnf/vel_topic_name = /" evel-test-collector/config/collector.conf
   sed -i -- "/vel_topic_name = /a vdu3_id = $vdu3_id" evel-test-collector/config/collector.conf
   sed -i -- "/vel_topic_name = /a vdu2_id = $vdu2_id" evel-test-collector/config/collector.conf
   sed -i -- "/vel_topic_name = /a vdu1_id = $vdu1_id" evel-test-collector/config/collector.conf

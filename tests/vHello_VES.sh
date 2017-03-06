@@ -48,8 +48,10 @@
 #     <ip>: hypervisor ip 
 #     <user>: username on hypervisor hosts, for ssh (user must be setup for 
 #       key-based auth on the hosts)
-#   $ bash vHello_VES.sh monitor
+#     <monitor_ip>" IP address of VDU4 (monitor VM)
+#   $ bash vHello_VES.sh monitor <monitor_ip>
 #     monitor: attach to the collector VM and run the VES Monitor
+#     <monitor_ip>" IP address of VDU4 (monitor VM)
 #   $ bash vHello_VES.sh traffic
 #     traffic: generate some traffic
 #   $ bash vHello_VES.sh pause VDU1|VDU2
@@ -317,6 +319,12 @@ start() {
   scp -i /opt/tacker/vHello -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /opt/tacker/blueprints/tosca-vnfd-hello-ves/start.sh ubuntu@${vdu_ip[4]}:/home/ubuntu/start.sh
   scp -i /opt/tacker/vHello -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /opt/tacker/blueprints/tosca-vnfd-hello-ves/monitor.py ubuntu@${vdu_ip[4]}:/home/ubuntu/monitor.py
   ssh -i /opt/tacker/vHello -t -t -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[4]} "bash /home/ubuntu/start.sh monitor ${vdu_id[1]} ${vdu_id[2]} ${vdu_id[3]} hello world"
+
+  echo "$0: $(date) Startup complete. VDU addresses:"
+  echo "web server  1: ${vdu_ip[1]}"
+  echo "web server  2: ${vdu_ip[2]}"
+  echo "load balancer: ${vdu_ip[3]}"
+  echo "monitor      : ${vdu_ip[4]}"
 }
 
 stop() {
@@ -373,10 +381,9 @@ start_collectd() {
   echo "$0: $(date) update start.sh script in case it changed"
   cp -r blueprints/tosca-vnfd-hello-ves/start.sh /opt/tacker/blueprints/tosca-vnfd-hello-ves
   echo "$0: $(date) start collectd agent on bare metal hypervisor host"
-  get_vdu_ip VDU4
   scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /opt/tacker/blueprints/tosca-vnfd-hello-ves/start.sh $2@$1:/home/$2/start.sh
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $2@$1 \
-    "nohup bash /home/$2/start.sh collectd $1 $ip hello world > /dev/null 2>&1 &"
+    "nohup bash /home/$2/start.sh collectd $1 $3 hello world > /dev/null 2>&1 &"
 }
 
 stop_collectd() {
@@ -407,11 +414,7 @@ get_vdu_ip () {
 
 monitor () {
   echo "$0: $(date) Start the VES Monitor in VDU4 - Stop first if running"
-  get_vdu_ip VDU4
-  sudo cp /opt/tacker/vHello /tmp/vHello
-  sudo chown $USER:$USER /tmp/vHello
-  chmod 600 /tmp/vHello
-  ssh -t -t -i /tmp/vHello -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$ip << 'EOF'
+  sudo ssh -t -t -i /opt/tacker/vHello -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$1 << 'EOF'
 sudo kill $(ps -ef | grep evel-test-collector | awk '{print $2}')
 python monitor.py --config evel-test-collector/config/collector.conf --section default 
 EOF
@@ -479,7 +482,8 @@ case "$1" in
     pass
     ;;
   monitor)
-    monitor
+    monitor $2
+    if [ $? -eq 1 ]; then fail; fi
     pass
     ;;
   traffic)
@@ -544,8 +548,10 @@ case "$1" in
      <ip>: hypervisor ip 
      <user>: username on hypervisor hosts, for ssh (user must be setup for 
        key-based auth on the hosts)
-   $ bash vHello_VES.sh monitor
+     <monitor_ip>" IP address of VDU4 (monitor VM)
+   $ bash vHello_VES.sh monitor <monitor_ip>
      monitor: attach to the collector VM and run the VES Monitor
+     <monitor_ip>" IP address of VDU4 (monitor VM)
    $ bash vHello_VES.sh traffic
      traffic: generate some traffic
    $ bash vHello_VES.sh pause VDU1|VDU2
