@@ -124,7 +124,8 @@ setup () {
   chmod 755 /opt/tacker/*.sh
 
   echo "$0: $(date) tacker-setup part 1"
-  bash utils/tacker-setup.sh init
+  wget https://git.opnfv.org/models/plain/tests/utils/tacker-setup.sh -O /tmp/tacker-setup.sh
+  bash /tmp/tacker-setup.sh init
   if [ $? -eq 1 ]; then fail; fi
 
   echo "$0: $(date) tacker-setup part 2"
@@ -166,8 +167,8 @@ copy_blueprint() {
   fi
 
   echo "$0: $(date) copy tosca-vnfd-hello-ves to blueprints folder"
+  if [[ ! -d /opt/tacker/blueprints ]]; then mkdir /opt/tacker/blueprints; fi
   cp -r blueprints/tosca-vnfd-hello-ves /opt/tacker/blueprints/tosca-vnfd-hello-ves
-  cp $0 /opt/tacker/.
 }
 
 start() {
