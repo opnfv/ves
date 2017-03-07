@@ -42,16 +42,16 @@
 #     branch: OpenStack branch to install (default: master)
 #   $ bash vHello_VES.sh start
 #     start: install blueprint and run test
-#   $ bash vHello_VES.sh start_collectd|stop_collectd <ip> <user> <hpv_ip>
+#   $ bash vHello_VES.sh start_collectd|stop_collectd <hpv_ip> <user> <mon_ip> 
 #     start_collectd: install and start collectd daemon on hypervisor
 #     stop_collectd: stop and uninstall collectd daemon on hypervisor
-#     <ip>: hypervisor ip 
+#     <hpv_ip>: hypervisor ip 
 #     <user>: username on hypervisor hosts, for ssh (user must be setup for 
 #       key-based auth on the hosts)
-#     <hpv_ip>" IP address of hypervisor to start collectd daemon on
-#   $ bash vHello_VES.sh monitor <monitor_ip>
+#     <mon_ip>: IP address of VES monitor
+#   $ bash vHello_VES.sh monitor <mon_ip>
 #     monitor: attach to the collector VM and run the VES Monitor
-#     <monitor_ip>" IP address of VDU4 (monitor VM)
+#     <mon_ip>: IP address of VDU4 (monitor VM)
 #   $ bash vHello_VES.sh traffic
 #     traffic: generate some traffic
 #   $ bash vHello_VES.sh pause VDU1|VDU2
@@ -281,7 +281,7 @@ start() {
   vdu_url[1]="http://${vdu_ip[1]}"
   vdu_url[2]="http://${vdu_ip[2]}"
   vdu_url[3]="http://${vdu_ip[3]}"
-  vdu_url[4]="http://${vdu_ip[4]}:30000/eventListener/v1"
+  vdu_url[4]="http://${vdu_ip[4]}:30000/eventListener/v3"
 
   apt-get install -y curl
 
@@ -311,8 +311,8 @@ start() {
   for i in $vnf_vdui; do
     ssh -i /opt/tacker/vHello -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[$i]} "sudo chown ubuntu /home/ubuntu"
     scp -i /opt/tacker/vHello -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /opt/tacker/blueprints/tosca-vnfd-hello-ves/start.sh ubuntu@${vdu_ip[$i]}:/home/ubuntu/start.sh
-#    ssh -i /opt/tacker/vHello -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-#    ubuntu@${vdu_ip[$i]} "nohup bash /home/ubuntu/start.sh agent ${vdu_id[$i]} ${vdu_ip[4]} hello world > /dev/null 2>&1 &"
+    ssh -i /opt/tacker/vHello -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+    ubuntu@${vdu_ip[$i]} "nohup bash /home/ubuntu/start.sh agent ${vdu_id[$i]} ${vdu_ip[4]} hello world > /dev/null 2>&1 &"
   done
 
   echo "$0: $(date) setup Monitor in VDU4 at ${vdu_ip[4]}"
@@ -416,7 +416,7 @@ monitor () {
   echo "$0: $(date) Start the VES Monitor in VDU4 - Stop first if running"
   sudo ssh -t -t -i /opt/tacker/vHello -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$1 << 'EOF'
 sudo kill $(ps -ef | grep evel-test-collector | awk '{print $2}')
-python monitor.py --config evel-test-collector/config/collector.conf --section default 
+python evel-test-collector/code/collector/monitor.py --config evel-test-collector/config/collector.conf --section default 
 EOF
 }
 
@@ -541,16 +541,16 @@ case "$1" in
      start: install blueprint and run test
      <user>: username on hypervisor hosts, for ssh (user must be setup for 
        key-based auth on the hosts)
-   $ bash vHello_VES.sh start_collectd|stop_collectd <ip> <user> <hpv_ip>
+   $ bash vHello_VES.sh start_collectd|stop_collectd <hpv_ip> <user> <mon_ip> 
      start_collectd: install and start collectd daemon on hypervisor
      stop_collectd: stop and uninstall collectd daemon on hypervisor
-     <ip>: hypervisor ip 
+     <hpv_ip>: hypervisor ip 
      <user>: username on hypervisor hosts, for ssh (user must be setup for 
        key-based auth on the hosts)
-     <hpv_ip>" IP address of hypervisor to start collectd daemon on
-   $ bash vHello_VES.sh monitor <monitor_ip>
+     <mon_ip>: IP address of VES monitor
+   $ bash vHello_VES.sh monitor <mon_ip>
      monitor: attach to the collector VM and run the VES Monitor
-     <monitor_ip>" IP address of VDU4 (monitor VM)
+     <mon_ip>: IP address of VDU4 (monitor VM)
    $ bash vHello_VES.sh traffic
      traffic: generate some traffic
    $ bash vHello_VES.sh pause VDU1|VDU2
