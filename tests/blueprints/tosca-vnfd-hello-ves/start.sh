@@ -52,6 +52,7 @@ setup_collectd () {
 	
   echo "$0: Install VES collectd plugin"
   git clone https://git.opnfv.org/barometer
+  sudo sed -i -- "s/v1/v3/" barometer/3rd_party/collectd-ves-plugin/ves_plugin/ves_plugin.py
 
   sudo sed -i -- "s/FQDNLookup true/FQDNLookup false/" $conf
   sudo sed -i -- "s/#LoadPlugin cpu/LoadPlugin cpu/" $conf
@@ -164,12 +165,6 @@ setup_agent () {
   echo "$0: Use vHello_VES blueprint version of agent_demo.c"
   cp ves/tests/blueprints/tosca-vnfd-hello-ves/evel_demo.c evel-library/code/evel_demo/evel_demo.c
   
-  echo "$0: Update parameters and build agent demo"
-  # This sed command will add a line after the search line 
-  sed -i -- "s/api_port,/30000,/" evel-library/code/evel_demo/evel_demo.c
-  sed -i -- "/api_secure,/{n;s/.*/                      \"$username\",/}" evel-library/code/evel_demo/evel_demo.c
-  sed -i -- "/\"$username\",/{n;s/.*/                      \"$password\",/}" evel-library/code/evel_demo/evel_demo.c
-
   echo "$0: Build evel_demo agent"
   cd evel-library/bldjobs
   make
