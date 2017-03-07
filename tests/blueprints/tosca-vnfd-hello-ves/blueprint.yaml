@@ -203,6 +203,7 @@ topology_template:
         image: models-xenial-server
         availability_zone: nova
         mgmt_driver: noop
+        config_drive: true
         user_data_format: RAW
         user_data: |
           #!/bin/bash
@@ -213,6 +214,7 @@ topology_template:
           cat << EOM >/home/ubuntu/.ssh/authorized_keys
           <pubkey>
           EOM
+          sudo mount /dev/sr0 /mnt/
           cat << EOF >/tmp/setup.sh
           echo "1" | sudo tee /proc/sys/net/ipv4/ip_forward
           sudo sysctl net.ipv4.ip_forward=1

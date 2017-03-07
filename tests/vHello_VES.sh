@@ -307,6 +307,11 @@ start() {
   assert "models-tacker-vnfd-002 (artifacts creation)" true
   assert "models-tacker-vnfd-003 (user_data creation)" true
 
+  echo "$0: $(date) setup Monitor in VDU4 at ${vdu_ip[4]}"
+  scp -i /opt/tacker/vHello -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /opt/tacker/blueprints/tosca-vnfd-hello-ves/start.sh ubuntu@${vdu_ip[4]}:/home/ubuntu/start.sh
+  scp -i /opt/tacker/vHello -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /opt/tacker/blueprints/tosca-vnfd-hello-ves/monitor.py ubuntu@${vdu_ip[4]}:/home/ubuntu/monitor.py
+  ssh -i /opt/tacker/vHello -t -t -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[4]} "nohup bash /home/ubuntu/start.sh monitor ${vdu_id[1]} ${vdu_id[2]} ${vdu_id[3]} hello world > ~/monitor.log &"
+
   echo "$0: $(date) Execute agent startup script in the VNF VMs"
   for i in $vnf_vdui; do
     ssh -i /opt/tacker/vHello -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[$i]} "sudo chown ubuntu /home/ubuntu"
@@ -314,11 +319,6 @@ start() {
     ssh -i /opt/tacker/vHello -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
     ubuntu@${vdu_ip[$i]} "nohup bash /home/ubuntu/start.sh agent ${vdu_id[$i]} ${vdu_ip[4]} hello world > /dev/null 2>&1 &"
   done
-
-  echo "$0: $(date) setup Monitor in VDU4 at ${vdu_ip[4]}"
-  scp -i /opt/tacker/vHello -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /opt/tacker/blueprints/tosca-vnfd-hello-ves/start.sh ubuntu@${vdu_ip[4]}:/home/ubuntu/start.sh
-  scp -i /opt/tacker/vHello -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /opt/tacker/blueprints/tosca-vnfd-hello-ves/monitor.py ubuntu@${vdu_ip[4]}:/home/ubuntu/monitor.py
-  ssh -i /opt/tacker/vHello -t -t -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[4]} "bash /home/ubuntu/start.sh monitor ${vdu_id[1]} ${vdu_id[2]} ${vdu_id[3]} hello world"
 
   echo "$0: $(date) Startup complete. VDU addresses:"
   echo "web server  1: ${vdu_ip[1]}"

@@ -202,7 +202,7 @@ setup_monitor () {
   sed -i -- "/vel_topic_name = /a vdu1_id = $vdu1_id" evel-test-collector/config/collector.conf
 
   cp monitor.py evel-test-collector/code/collector/monitor.py
-#  python evel-test-collector/code/collector/monitor.py --config evel-test-collector/config/collector.conf --section default 
+  nohup python evel-test-collector/code/collector/monitor.py --config evel-test-collector/config/collector.conf --section default > /dev/null 2>&1 &
 }
 
 type=$1
