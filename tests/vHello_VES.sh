@@ -52,12 +52,12 @@
 #   $ bash vHello_VES.sh monitor <mon_ip>
 #     monitor: attach to the collector VM and run the VES Monitor
 #     <mon_ip>: IP address of VDU4 (monitor VM)
-#   $ bash vHello_VES.sh traffic
+#   $ bash vHello_VES.sh traffic <ip>
 #     traffic: generate some traffic
-#   $ bash vHello_VES.sh pause VDU1|VDU2
+#     <ip>: address of server
+#   $ bash vHello_VES.sh pause <ip>
 #     pause: pause the VNF (web server) for a minute to generate a state change
-#     VDU1: Pause VDU1
-#     VDU2: Pause VDU2
+#     <ip>: address of server
 #   $ bash vHello_VES.sh stop
 #     stop: stop test and uninstall blueprint
 #   $ bash vHello_VES.sh clean  <hpvuser> <hpvpw>
@@ -422,24 +422,23 @@ EOF
 
 traffic () {
   echo "$0: $(date) Generate some traffic, somewhat randomly"
-  get_vdu_ip VDU3
   ns="0 00 000"
   while true
   do
     for n in $ns; do
       sleep .$n$[ ( $RANDOM % 10 ) + 1 ]s
-      curl -s http://$ip > /dev/null
+      curl -s http://$1 > /dev/null
     done
   done
 }
 
 pause () {
   echo "$0: $(date) Pause the VNF (web server) in $1 for 30 seconds to generate a state change fault report (Stopped)"
-  get_vdu_ip $1
-  ssh -i /tmp/vHello -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$ip "sudo docker pause vHello"
+  $1
+  sudo ssh -t -t -i /opt/tacker/vHello -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$1 "sudo docker pause vHello"
   sleep 20
   echo "$0: $(date) Unpausing the VNF to generate a state change fault report (Started)"
-  ssh -i /tmp/vHello -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$ip "sudo docker unpause vHello"
+  sudo ssh -t -t -i /opt/tacker/vHello -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$1 "sudo docker unpause vHello"
 }
 
 forward_to_container () {
@@ -487,7 +486,7 @@ case "$1" in
     pass
     ;;
   traffic)
-    traffic
+    traffic $2
     pass
     ;;
   pause)
@@ -551,12 +550,12 @@ case "$1" in
    $ bash vHello_VES.sh monitor <mon_ip>
      monitor: attach to the collector VM and run the VES Monitor
      <mon_ip>: IP address of VDU4 (monitor VM)
-   $ bash vHello_VES.sh traffic
+   $ bash vHello_VES.sh traffic <ip>
      traffic: generate some traffic
-   $ bash vHello_VES.sh pause VDU1|VDU2
+     <ip>: address of server
+   $ bash vHello_VES.sh pause <ip>
      pause: pause the VNF (web server) for a minute to generate a state change
-     VDU1: Pause VDU1
-     VDU2: Pause VDU2
+     <ip>: address of server
    $ bash vHello_VES.sh stop
      stop: stop test and uninstall blueprint
    $ bash vHello_VES.sh clean <user>

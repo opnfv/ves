@@ -172,7 +172,7 @@ setup_agent () {
   
   echo "$0: Start evel_demo agent"
   id=$(cut -d ',' -f 3 /mnt/openstack/latest/meta_data.json | cut -d '"' -f 4)
-  nohup ../output/x86_64/evel_demo --id $id --fqdn $collector_ip --port 30000 --username $username --password $password > /dev/null 2>&1 &
+  nohup ../output/x86_64/evel_demo --id $id --fqdn $collector_ip --port 30000 --username $username --password $password -x > /dev/null 2>&1 &
 
   echo "$0: Start collectd agent running in the VM"
   setup_collectd true
