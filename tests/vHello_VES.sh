@@ -416,7 +416,7 @@ monitor () {
   echo "$0: $(date) Start the VES Monitor in VDU4 - Stop first if running"
   sudo ssh -t -t -i /opt/tacker/vHello -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$1 << 'EOF'
 sudo kill $(ps -ef | grep evel-test-collector | awk '{print $2}')
-python monitor.py --config evel-test-collector/config/collector.conf --section default 
+python evel-test-collector/code/collector/monitor.py --config evel-test-collector/config/collector.conf --section default 
 EOF
 }
 

@@ -166,6 +166,7 @@ setup_agent () {
   
   echo "$0: Update parameters and build agent demo"
   # This sed command will add a line after the search line 
+  sed -i -- "s/api_port,/30000,/" evel-library/code/evel_demo/evel_demo.c
   sed -i -- "/api_secure,/{n;s/.*/                      \"$username\",/}" evel-library/code/evel_demo/evel_demo.c
   sed -i -- "/\"$username\",/{n;s/.*/                      \"$password\",/}" evel-library/code/evel_demo/evel_demo.c
 
@@ -175,7 +176,8 @@ setup_agent () {
   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/ubuntu/evel-library/libs/x86_64
   
   echo "$0: Start evel_demo agent"
-  nohup ../output/x86_64/evel_demo --id $vm_id --fqdn $collector_ip --port 30000 --username $username --password $password > /dev/null 2>&1 &
+  id=$(cut -d ',' -f 3 /mnt/openstack/latest/meta_data.json | cut -d '"' -f 4)
+  nohup ../output/x86_64/evel_demo --id $id --fqdn $collector_ip --port 30000 --username $username --password $password > /dev/null 2>&1 &
 
   echo "$0: Start collectd agent running in the VM"
   setup_collectd true
@@ -204,7 +206,8 @@ setup_monitor () {
   sed -i -- "/vel_topic_name = /a vdu2_id = $vdu2_id" evel-test-collector/config/collector.conf
   sed -i -- "/vel_topic_name = /a vdu1_id = $vdu1_id" evel-test-collector/config/collector.conf
 
-#  python monitor.py --config evel-test-collector/config/collector.conf --section default 
+  cp monitor.py evel-test-collector/code/collector/monitor.py
+  python evel-test-collector/code/collector/monitor.py --config evel-test-collector/config/collector.conf --section default 
 }
 
 type=$1
