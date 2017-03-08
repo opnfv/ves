@@ -253,7 +253,7 @@ start() {
   for vdu in $vdus; do
     echo "$0: $(date) Setting port security on $vdu"  
     SERVER_ID=$(openstack server list | awk "/$vdu/ { print \$2 }")
-    id=($(neutron port-list|grep -v "+"|grep -v name|awk '{print $2}'))
+    id=($(neutron port-list -F id -f value))
     for id in ${id[@]}; do
       if [[ $(neutron port-show $id|grep $SERVER_ID) ]]; then neutron port-update ${id} --port-security-enabled=True; fi
     done
@@ -310,7 +310,7 @@ start() {
   echo "$0: $(date) setup Monitor in VDU4 at ${vdu_ip[4]}"
   scp -i /opt/tacker/vHello -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /opt/tacker/blueprints/tosca-vnfd-hello-ves/start.sh ubuntu@${vdu_ip[4]}:/home/ubuntu/start.sh
   scp -i /opt/tacker/vHello -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /opt/tacker/blueprints/tosca-vnfd-hello-ves/monitor.py ubuntu@${vdu_ip[4]}:/home/ubuntu/monitor.py
-  ssh -i /opt/tacker/vHello -t -t -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[4]} "nohup bash /home/ubuntu/start.sh monitor ${vdu_id[1]} ${vdu_id[2]} ${vdu_id[3]} hello world > ~/monitor.log &"
+  ssh -i /opt/tacker/vHello -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[4]} "nohup bash /home/ubuntu/start.sh monitor ${vdu_id[1]} ${vdu_id[2]} ${vdu_id[3]} hello world > /dev/null 2>&1 &"
 
   echo "$0: $(date) Execute agent startup script in the VNF VMs"
   for i in $vnf_vdui; do
@@ -416,7 +416,8 @@ monitor () {
   echo "$0: $(date) Start the VES Monitor in VDU4 - Stop first if running"
   sudo ssh -t -t -i /opt/tacker/vHello -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$1 << 'EOF'
 sudo kill $(ps -ef | grep evel-test-collector | awk '{print $2}')
-python evel-test-collector/code/collector/monitor.py --config evel-test-collector/config/collector.conf --section default 
+nohup python evel-test-collector/code/collector/monitor.py --config evel-test-collector/config/collector.conf --section default > /home/ubuntu/monitor.log &
+tail -f monitor.log
 EOF
 }
 
