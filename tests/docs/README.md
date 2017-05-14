@@ -1,0 +1,1 @@
+This folder contains the latest version of the VES schema, aligned with the latest release (5.0) of the AT&T VES schema published at https://github.com/att/evel-test-collector/tree/master/docs/att_interface_definition/.
