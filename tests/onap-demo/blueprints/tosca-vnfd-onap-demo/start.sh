@@ -21,7 +21,8 @@
 # How to use:
 # Intended to be invoked from ves_onap_demo.sh
 # $ bash start.sh type params
-#   type: type of VNF component [monitor|collectd]
+#   type: type of VNF component [webserver|vfw|vlb|monitor|collectd]
+#     webserver|vfw|vlb| params: ID CollectorIP username password
 #     collector params: ID CollectorIP username password
 #     monitor params: VDU1_ID VDU1_ID VDU1_ID username password
 #   ID: VM ID
@@ -51,8 +52,11 @@ setup_collectd () {
   cd ~
 
   echo "$0: Install VES collectd plugin"
-  git clone https://git.opnfv.org/barometer
-  sudo sed -i -- "s/v1/v3/" barometer/3rd_party/collectd-ves-plugin/ves_plugin/ves_plugin.py
+  # this is a clone of barometer patch https://gerrit.opnfv.org/gerrit/#/c/35489
+  git clone https://gerrit.opnfv.org/gerrit/barometer
+  cd barometer
+  git pull https://gerrit.opnfv.org/gerrit/barometer refs/changes/89/35489/2
+  cd ..
 
   sudo sed -i -- "s/FQDNLookup true/FQDNLookup false/" $conf
   sudo sed -i -- "s/#LoadPlugin cpu/LoadPlugin cpu/" $conf
@@ -60,8 +64,8 @@ setup_collectd () {
   sudo sed -i -- "s/#LoadPlugin interface/LoadPlugin interface/" $conf
   sudo sed -i -- "s/#LoadPlugin memory/LoadPlugin memory/" $conf
 
-  if [[ "$guest" == true ]]; then
-    cat <<EOF | sudo tee -a $conf
+
+  cat <<EOF | sudo tee -a $conf
 <LoadPlugin python>
   Globals true
 </LoadPlugin>
@@ -79,53 +83,13 @@ setup_collectd () {
   Username "hello"
   Password "world"
   FunctionalRole "Collectd VES Agent"
-  GuestRunning true
-</Module>
-</Plugin>
-<Plugin cpu>
-        ReportByCpu false
-        ValuesPercentage true
-</Plugin>
-LoadPlugin aggregation
-<Plugin aggregation>
-        <Aggregation>
-                Plugin "cpu"
-                Type "percent"
-                GroupBy "Host"
-                GroupBy "TypeInstance"
-                SetPlugin "cpu-aggregation"
-                CalculateAverage true
-        </Aggregation>
-</Plugin>
-LoadPlugin uuid
-EOF
-  else
-    cat <<EOF | sudo tee -a $conf
-<LoadPlugin python>
-  Globals true
-</LoadPlugin>
-<Plugin python>
-  ModulePath "/home/$USER/barometer/3rd_party/collectd-ves-plugin/ves_plugin/"
-  LogTraces true
-  Interactive false
-  Import "ves_plugin"
-<Module ves_plugin>
-  Domain "$collector_ip"
-  Port 30000
-  Path ""
-  Topic ""
-  UseHttps false
-  Username "hello"
-  Password "world"
-  FunctionalRole "Collectd VES Agent"
-  GuestRunning false
 </Module>
 </Plugin>
 LoadPlugin virt
 <Plugin virt>
         Connection "qemu:///system"
         RefreshInterval 60
-        HostnameFormat uuid
+        HostnameFormat name uuid
 </Plugin>
 <Plugin cpu>
         ReportByCpu false
@@ -144,12 +108,12 @@ LoadPlugin aggregation
 </Plugin>
 LoadPlugin uuid
 EOF
-  fi
   sudo service collectd restart
 }
 
-setup_agent () {
+vnfc_common() {
   echo "$0: Install prerequisites"
+  sudo apt-get update
   sudo apt-get install -y gcc
   # NOTE: force is required as some packages can't be authenticated...
   sudo apt-get install -y --force-yes libcurl4-openssl-dev
@@ -157,25 +121,68 @@ setup_agent () {
 
   echo "$0: Clone agent library"
   cd /home/ubuntu
+  rm -rf evel-library
   git clone https://github.com/att/evel-library.git
 
-  echo "$0: Clone VES repo"
-  git clone https://gerrit.opnfv.org/gerrit/ves
+  echo "$0: Update EVEL_API version (workaround until the library is updated)"
+  sed -i -- "s/#define EVEL_API_MAJOR_VERSION 3/#define EVEL_API_MAJOR_VERSION 5/" evel-library/code/evel_library/evel.h
+  sed -i -- "s/#define EVEL_API_MINOR_VERSION 0/#define EVEL_API_MINOR_VERSION 0/" evel-library/code/evel_library/evel.h
+}
 
-  echo "$0: Use ves_onap_demo blueprint version of agent_demo.c"
-  cp ves/tests/blueprints/tosca-vnfd-onap-demo/evel_demo.c evel-library/code/evel_demo/evel_demo.c
+setup_vFW () {
+  vnfc_common
 
-  echo "$0: Build evel_demo agent"
-  cd evel-library/bldjobs
+  echo "$0: Build evel_library agent"
+  cd ~/evel-library/bldjobs
   make
   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/ubuntu/evel-library/libs/x86_64
 
-  echo "$0: Start evel_demo agent"
-  id=$(cut -d ',' -f 3 /mnt/openstack/latest/meta_data.json | cut -d '"' -f 4)
-  nohup ../output/x86_64/evel_demo --id $id --fqdn $collector_ip --port 30000 --username $username --password $password -x > /dev/null 2>&1 &
+  echo "$0: Build agent"
+  cd ~/tosca-vnfd-onap-demo/vFW
+  make
 
-  echo "$0: Start collectd agent running in the VM"
-  setup_collectd true
+  echo "$0: Start agent"
+  vnic=$(route | grep '^default' | grep -o '[^ ]*$')
+  id=$(cut -d ',' -f 3 /mnt/openstack/latest/meta_data.json | cut -d '"' -f 4)
+  echo "$0: Starting vpp_measurement_reporter $id $collector_ip 30000 $username $password $vnic vLB"  
+  nohup ~/tosca-vnfd-onap-demo/vFW/vpp_measurement_reporter $id $collector_ip 30000 $username $password $vnic vFW -x > /dev/null 2>&1 &
+}
+
+setup_vLB () {
+  vnfc_common
+
+  echo "$0: Build evel_library agent"
+  cd ~/evel-library/bldjobs
+  make
+  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/ubuntu/evel-library/libs/x86_64
+
+  # TODO: Currently using a single agent for both vFW and vLB as it's all common
+  # except for DNS-related aspects not yet implemented.
+  echo "$0: Build agent"
+  cd ~/tosca-vnfd-onap-demo/vFW
+  make
+
+  echo "$0: Start agent"
+  vnic=$(route | grep '^default' | grep -o '[^ ]*$')
+  id=$(cut -d ',' -f 3 /mnt/openstack/latest/meta_data.json | cut -d '"' -f 4)
+  echo "$0: Starting vpp_measurement_reporter $id $collector_ip 30000 $username $password $vnic vLB"  
+  nohup ~/tosca-vnfd-onap-demo/vFW/vpp_measurement_reporter $id $collector_ip 30000 $username $password $vnic vLB -x > /dev/null 2>&1 &
+}
+
+setup_webserver () {
+  vnfc_common
+
+  echo "$0: Use ves_onap_demo blueprint version of agent_demo.c"
+  cp ~/tosca-vnfd-onap-demo/evel_demo.c ~/evel-library/code/evel_demo/evel_demo.c
+
+  echo "$0: Build agent"
+  cd ~/evel-library/bldjobs
+  make
+  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/ubuntu/evel-library/libs/x86_64
+
+  echo "$0: Start agent"
+  id=$(cut -d ',' -f 3 /mnt/openstack/latest/meta_data.json | cut -d '"' -f 4)
+  nohup ../output/x86_64/evel_demo --id $id --fqdn $collector_ip --port 30000 --username $username --password $password -x > ~/evel_demo.log 2>&1 &
 }
 
 setup_monitor () {
@@ -189,20 +196,42 @@ setup_monitor () {
   echo "$0: setup VES Monitor config"
   sudo mkdir /var/log/att
   sudo chown ubuntu /var/log/att
-  touch /var/log/att/collector.log
+  touch /var/log/att/monitor.log
   sudo chown ubuntu /home/ubuntu/
   cd /home/ubuntu/
   git clone https://github.com/att/evel-test-collector.git
-  sed -i -- "s/vel_username = /vel_username = $username/" evel-test-collector/config/collector.conf
-  sed -i -- "s/vel_password = /vel_password = $password/" evel-test-collector/config/collector.conf
-  sed -i -- "s~vel_path = vendor_event_listener/~vel_path = ~" evel-test-collector/config/collector.conf
-  sed -i -- "s/vel_topic_name = example_vnf/vel_topic_name = /" evel-test-collector/config/collector.conf
+  sed -i -- "s/vel_username =/vel_username = $username/g" evel-test-collector/config/collector.conf
+  sed -i -- "s/vel_password =/vel_password = $password/g" evel-test-collector/config/collector.conf
+  sed -i -- "s~vel_path = vendor_event_listener/~vel_path = ~g" evel-test-collector/config/collector.conf
+  sed -i -- "s/vel_topic_name = example_vnf/vel_topic_name = /g" evel-test-collector/config/collector.conf
+  sed -i -- "/vel_topic_name = /a vdu4_id = $vdu4_id" evel-test-collector/config/collector.conf
   sed -i -- "/vel_topic_name = /a vdu3_id = $vdu3_id" evel-test-collector/config/collector.conf
   sed -i -- "/vel_topic_name = /a vdu2_id = $vdu2_id" evel-test-collector/config/collector.conf
   sed -i -- "/vel_topic_name = /a vdu1_id = $vdu1_id" evel-test-collector/config/collector.conf
 
-  cp monitor.py evel-test-collector/code/collector/monitor.py
-  nohup python evel-test-collector/code/collector/monitor.py --config evel-test-collector/config/collector.conf --section default > /home/ubuntu/monitor.log
+  echo "$0: install influxdb and python influxdb library"
+  sudo apt-get install -y influxdb
+  sudo service influxdb start
+  sudo apt-get install -y python-influxdb
+
+  echo "$0: install grafana"
+  sudo apt-get install -y grafana
+  sudo service grafana-server start
+  sudo update-rc.d grafana-server defaults
+
+  echo "$0: Setup InfluxDB datatabase"
+  python tosca-vnfd-onap-demo/infsetup.py
+
+  echo "$0: Add datasource to grafana"
+  curl http://admin:admin@localhost:3000/api/datasources
+  curl -H "Accept: application/json" -H "Content-type: application/json" -X POST -d '{"name":"VESEvents","type":"influxdb","access":"direct","url":"http://localhost:8086","password":"root","user":"root","database":"veseventsdb","basicAuth":false,"basicAuthUser":"","basicAuthPassword":"","withCredentials":false,"isDefault":false,"jsonData":null}' \
+    http://admin:admin@localhost:3000/api/datasources
+
+  echo "$0: Import Dashboard.json into grafana"
+  curl -H "Accept: application/json" -H "Content-type: application/json" -X POST -d @tosca-vnfd-onap-demo/Dashboard.json http://admin:admin@localhost:3000/api/dashboards/db	
+
+  cp tosca-vnfd-onap-demo/monitor.py evel-test-collector/code/collector/monitor.py
+  nohup python evel-test-collector/code/collector/monitor.py --config evel-test-collector/config/collector.conf --section default > ~/monitor.log 2>&1 &
 }
 
 type=$1
@@ -211,13 +240,13 @@ if [[ "$type" == "monitor" ]]; then
   vdu1_id=$2
   vdu2_id=$3
   vdu3_id=$4
-  username=$5
-  password=$6
+  vdu4_id=$5
+  username=$6
+  password=$7
 else
-  vm_id=$2
-  collector_ip=$3
-  username=$4
-  password=$5
+  collector_ip=$2
+  username=$3
+  password=$4
 fi
 
 setup_$type $1
