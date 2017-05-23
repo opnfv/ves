@@ -1,21 +1,21 @@
 /**************************************************************************//**
  * @file
- * Agent for the OPNFV VNF Event Stream (VES) vHello_VES test
+ * Agent for the OPNFV VNF Event Stream (VES) ves_onap_demo test
  *
  * Copyright 2016-2017 AT&T Intellectual Property, Inc
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- * 
+ *
  *****************************************************************************/
 
 #include <stdio.h>
@@ -147,11 +147,11 @@ char *app_prevstate = "Stopped";
 /**************************************************************************//**
  * Report app state change fault.
  *
- * Reports the change in app state. 
+ * Reports the change in app state.
  *
  * param[in]  char *change     The type of change ("Started", "Stopped")
  *****************************************************************************/
-void report_app_statechange(char *change) 
+void report_app_statechange(char *change)
 {
   printf("report_app_statechange(%s)\n", change);
   EVENT_FAULT * fault = NULL;
@@ -178,7 +178,7 @@ void report_app_statechange(char *change)
 /**************************************************************************//**
  * Check status of the app container.
  *
- * Checks and reports any change in app state. 
+ * Checks and reports any change in app state.
  *
  * param[in]  none
  *****************************************************************************/
@@ -188,7 +188,7 @@ void check_app_container_state() {
   int status;
   char state[100];
 
-  fp = popen("sudo docker inspect vHello | grep Status | sed -- 's/,//g' | sed -- 's/\"//g' | sed -- 's/            Status: //g'", "r");
+  fp = popen("sudo docker inspect onap-demo | grep Status | sed -- 's/,//g' | sed -- 's/\"//g' | sed -- 's/            Status: //g'", "r");
   if (fp == NULL) {
     EVEL_ERROR("popen failed to execute command");
   }
@@ -275,7 +275,7 @@ void measure_traffic() {
   strncat(period, secs, 21);
   // ....x....1....x....2.
   // 15/Oct/2016:17:51:19
-  strcpy(cmd, "sudo docker logs vHello | grep -c ");
+  strcpy(cmd, "sudo docker logs onap-demo | grep -c ");
   strncat(cmd, period, 100);
 
   fp = popen(cmd, "r");
