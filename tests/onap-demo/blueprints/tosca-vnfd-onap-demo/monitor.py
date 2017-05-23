@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# What this is: Monitor and closed-loop policy agent as part of the OPNFV VES 
-# vHello_VES demo. 
+# What this is: Monitor and closed-loop policy agent as part of the OPNFV VES
+# vHello_VES demo.
 #
 # Status: this is a work in progress, under test.
 
@@ -222,7 +222,7 @@ def listener(environ, start_response, schema):
             start_response('202 Accepted', [])
             yield ''
     else:
-        logger.warn('Failed to authenticate OK')
+        logger.warn('Failed to authenticate OK; creds: ' +  credentials)
         print('Failed to authenticate agent credentials: ', credentials)
 
         #----------------------------------------------------------------------
@@ -256,14 +256,15 @@ def process_event(body):
   epoch = e.event.commonEventHeader.lastEpochMicrosec
   sourceId = e.event.commonEventHeader.sourceId
 
-  report_time = time.strftime('%Y-%m-%d %H:%M:%S', 
+  report_time = time.strftime('%Y-%m-%d %H:%M:%S',
                   time.localtime(int(epoch)/1000000))
 
   host = e.event.commonEventHeader.reportingEntityName
   if 'VDU1' in host or 'vdu1' in host: vdu = 1
   if 'VDU2' in host or 'vdu2' in host: vdu = 2
   if 'VDU3' in host or 'vdu3' in host: vdu = 3
-  
+  if 'VDU4' in host or 'vdu4' in host: vdu = 4
+
   domain = e.event.commonEventHeader.domain
 
   if domain == 'measurementsForVfScaling':
@@ -448,7 +449,7 @@ USAGE
                             help='Display version information')
         parser.add_argument('-a', '--api-version',
                             dest='api_version',
-                            default='3',
+                            default='5.1',
                             help='set API version')
         parser.add_argument('-c', '--config',
                             dest='config',
@@ -518,7 +519,7 @@ USAGE
         #----------------------------------------------------------------------
         global logger
         print('Logfile: {0}'.format(log_file))
-        logger = logging.getLogger('collector')
+        logger = logging.getLogger('monitor')
         if verbose > 0:
             print('Verbose mode on')
             logger.setLevel(logging.DEBUG)
