@@ -52,16 +52,19 @@
 #   $ bash ves_onap_demo.sh start_collectd|stop_collectd <hpv_ip> <user> <mon_ip>
 #     start_collectd: install and start collectd daemon on hypervisor
 #     stop_collectd: stop and uninstall collectd daemon on hypervisor
-#     <hpv_ip>: hypervisor ip
+#     <hpv_ip>: hypervisor ip (ip of bare metal host that VM is running on)
 #     <user>: username on hypervisor hosts, for ssh (user must be setup for
 #       key-based auth on the hosts)
 #     <mon_ip>: IP address of VES monitor
-#   $ bash ves_onap_demo.sh monitor <mon_ip>
+#    note: run this on the undercloud as stack user; hpv_ip = compute node;
+#         user is heat-admin (on ubuntu, the default user is 'ubuntu');
+#         mon_ip was printed out in previous step
+#   $ bash ves_onap_demo.sh monitor <mon_ip>  -- run this on jumphost (undercloud if Apex)
 #     monitor: attach to the collector VM and run the VES Monitor
 #     <mon_ip>: IP address of VDU4 (monitor VM)
 #   $ bash ves_onap_demo.sh traffic <ip>
 #     traffic: generate some traffic
-#     <ip>: address of server
+#     <ip>: address of the firewall server
 #   $ bash ves_onap_demo.sh pause <ip>
 #     pause: pause the VNF (web server) for a minute to generate a state change
 #     <ip>: address of server
@@ -168,7 +171,7 @@ say_hello() {
   count=10
   while [[ $count -gt 0 && $pass != true ]]
   do
-    sleep 30
+    sleep 60
     let count=$count-1
     if [[ $(curl $1 | grep -c "Hello World") -gt 0 ]]; then
       echo "$0: $(date) Hello World found at $1"
@@ -200,7 +203,7 @@ start() {
   source /opt/tacker/admin-openrc.sh
 
   echo "$0: $(date) create flavor to use in blueprint"
-  openstack flavor create onap.demo --id auto --ram 1024 --disk 3 --vcpus 1
+  openstack flavor create onap.demo --id auto --ram 1024 --disk 4 --vcpus 1
 
   echo "$0: $(date) Create Nova key pair"
   if [[ -f /opt/tacker/onap-demo ]]; then rm /opt/tacker/onap-demo; fi
@@ -213,22 +216,16 @@ start() {
   pubkey=$(cat /opt/tacker/onap-demo.pub)
   sed -i -- "s~<pubkey>~$pubkey~" /opt/tacker/blueprints/tosca-vnfd-onap-demo/blueprint.yaml
 
-  vdus="VDU1 VDU2 VDU3 VDU4"
-  vdui="1 2 3 4"
-  vnf_vdui="1 2 3"
+  vdus="VDU1 VDU2 VDU3 VDU4 VDU5"
+  vdui="1 2 3 4 5"
+  vnf_vdui="1 2 3 4"
   declare -a vdu_id=()
   declare -a vdu_ip=()
   declare -a vdu_url=()
 
   # Setup for workarounds
-  echo "$0: $(date) allocate floating IPs no loop no array assignment"
+  echo "$0: $(date) allocate floating IPs"
   get_floating_net
-
-  # stack@us16-newton:~$ (openstack floating ip create public | awk "NR==7 { print \$4 }")
-  # 172.24.4.11
-  # stack@us16-newton:~$ (openstack floating ip create public | awk "/floating_ip_address/ { print \$4 }")
-  # 172.24.4.7
-
   for i in $vdui; do
     vdu_ip[$i]=$(nova floating-ip-create $FLOATING_NETWORK_NAME | awk "/$FLOATING_NETWORK_NAME/ { print \$4 }")
     echo "$0: $(date) Pre-allocated ${vdu_ip[$i]} to VDU$i"
@@ -237,7 +234,8 @@ start() {
 
   echo "$0: $(date) Inject web server floating IPs into LB code in blueprint"
   sed -i -- "s/<vdu1_ip>/${vdu_ip[1]}/" /opt/tacker/blueprints/tosca-vnfd-onap-demo/blueprint.yaml
-  sed -i -- "s/<vdu2_ip>/${vdu_ip[1]}/" /opt/tacker/blueprints/tosca-vnfd-onap-demo/blueprint.yaml
+  sed -i -- "s/<vdu2_ip>/${vdu_ip[2]}/" /opt/tacker/blueprints/tosca-vnfd-onap-demo/blueprint.yaml
+  sed -i -- "s/<vdu3_ip>/${vdu_ip[3]}/" /opt/tacker/blueprints/tosca-vnfd-onap-demo/blueprint.yaml
   # End setup for workarounds
 
   echo "$0: $(date) create VNFD named onap-demo-vnfd"
@@ -266,7 +264,7 @@ start() {
       assert "onap-demo-tacker-002 (onap-demo-vnf creation)" false
     fi
     let count=$count-1
-    sleep 30
+    sleep 60
     echo "$0: $(date) wait for onap-demo-vnf to go ACTIVE"
   done
   if [[ $count == 0 ]]; then
@@ -275,7 +273,7 @@ start() {
   fi
 
   # Setup for workarounds
-  echo "$0: $(date) directly set port security on ports (unsupported in Mitaka Tacker)"
+  echo "$0: $(date) directly set port security on ports (unsupported in Newton Tacker)"
   # Alternate method
   #  HEAT_ID=$(tacker vnf-show onap-demo-vnfd | awk "/instance_id/ { print \$4 }")
   #  SERVER_ID=$(openstack stack resource list $HEAT_ID | awk "/VDU1 / { print \$4 }")
@@ -288,7 +286,7 @@ start() {
     done
   done
 
-  echo "$0: $(date) directly assign security group (unsupported in Mitaka Tacker)"
+  echo "$0: $(date) directly assign security group to VDUs (unsupported in Newton Tacker)"
   if [[ $(neutron security-group-list | awk "/ onap-demo / { print \$2 }") ]]; then neutron security-group-delete onap-demo; fi
   neutron security-group-create onap-demo
   neutron security-group-rule-create --direction ingress --protocol TCP --port-range-min 22 --port-range-max 22 onap-demo
@@ -301,7 +299,7 @@ start() {
     openstack server add security group ${vdu_id[$i]} default
   done
 
-  echo "$0: $(date) associate floating IPs"
+  echo "$0: $(date) associate floating IPs with VDUs"
   # openstack server add floating ip INSTANCE_NAME_OR_ID FLOATING_IP_ADDRESS
   for i in $vdui; do
     openstack server add floating ip ${vdu_id[$i]} ${vdu_ip[$i]}
@@ -311,7 +309,8 @@ start() {
   vdu_url[1]="http://${vdu_ip[1]}"
   vdu_url[2]="http://${vdu_ip[2]}"
   vdu_url[3]="http://${vdu_ip[3]}"
-  vdu_url[4]="http://${vdu_ip[4]}:30000/eventListener/v3"
+  vdu_url[4]="http://${vdu_ip[4]}"
+  vdu_url[5]="http://${vdu_ip[5]}:30000/eventListener/v3"
 
   apt-get install -y curl
 
@@ -320,41 +319,47 @@ start() {
   resp=$(curl http://${vdu_ip[1]})
   echo $resp
   while [[ $count -gt 10 && "$resp" == "" ]]; do
-    echo "$0: $(date) waiting for HTTP response from LB"
-    sleep 60
+    echo "$0: $(date) waiting for HTTP response from FW"
+    sleep 90
     let count=$count+1
-    resp=$(curl http://${vdu_ip[3]})
+    resp=$(curl http://${vdu_ip[4]})
     echo $resp
   done
 
-  echo "$0: $(date) verify onap-demo server is running at each web server and via the LB"
+  echo "$0: $(date) verify onap-demo server is running at each web server and via the LB and via the FW"
+  echo "$0: $(date) say_hello VDU1"
   say_hello http://${vdu_ip[1]}
+  echo "$0: $(date) say_hello VDU2"
   say_hello http://${vdu_ip[2]}
+  echo "$0: $(date) say_hello VDU3"
   say_hello http://${vdu_ip[3]}
+  echo "$0: $(date) say_hello VDU4"
+  say_hello http://${vdu_ip[4]}
 
   assert "onap-demo-onap-demo-vnf-001 (onap-demo VNF creation)" true
   assert "onap-demo-tacker-003 (VNF creation)" true
   assert "onap-demo-tacker-vnfd-002 (artifacts creation)" true
   assert "onap-demo-tacker-vnfd-003 (user_data creation)" true
 
-  echo "$0: $(date) setup Monitor in VDU4 at ${vdu_ip[4]}"
-  scp -i /opt/tacker/onap-demo -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /opt/tacker/blueprints/tosca-vnfd-onap-demo/start.sh ubuntu@${vdu_ip[4]}:/home/ubuntu/start.sh
-  scp -i /opt/tacker/onap-demo -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /opt/tacker/blueprints/tosca-vnfd-onap-demo/monitor.py ubuntu@${vdu_ip[4]}:/home/ubuntu/monitor.py
-  ssh -i /opt/tacker/onap-demo -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[4]} "nohup bash /home/ubuntu/start.sh monitor ${vdu_id[1]} ${vdu_id[2]} ${vdu_id[3]} hello world > /dev/null 2>&1 &"
+  echo "$0: $(date) setup Monitor in VDU5 at ${vdu_ip[5]}"
+  scp -i /opt/tacker/onap-demo -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /opt/tacker/blueprints/tosca-vnfd-onap-demo/start.sh ubuntu@${vdu_ip[5]}:/home/ubuntu/start.sh
+  scp -i /opt/tacker/onap-demo -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /opt/tacker/blueprints/tosca-vnfd-onap-demo/monitor.py ubuntu@${vdu_ip[5]}:/home/ubuntu/monitor.py
+  ssh -i /opt/tacker/onap-demo -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[5]} "nohup bash /home/ubuntu/start.sh monitor ${vdu_id[1]} ${vdu_id[2]} ${vdu_id[3]} ${vdu_id[4]} hello world > /dev/null 2>&1 &"
 
   echo "$0: $(date) Execute agent startup script in the VNF VMs"
   for i in $vnf_vdui; do
     ssh -i /opt/tacker/onap-demo -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@${vdu_ip[$i]} "sudo chown ubuntu /home/ubuntu"
     scp -i /opt/tacker/onap-demo -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /opt/tacker/blueprints/tosca-vnfd-onap-demo/start.sh ubuntu@${vdu_ip[$i]}:/home/ubuntu/start.sh
     ssh -i /opt/tacker/onap-demo -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-    ubuntu@${vdu_ip[$i]} "nohup bash /home/ubuntu/start.sh agent ${vdu_id[$i]} ${vdu_ip[4]} hello world > /dev/null 2>&1 &"
+    ubuntu@${vdu_ip[$i]} "nohup bash /home/ubuntu/start.sh agent ${vdu_id[$i]} ${vdu_ip[5]} hello world > /dev/null 2>&1 &"
   done
 
   echo "$0: $(date) Startup complete. VDU addresses:"
   echo "web server  1: ${vdu_ip[1]}"
   echo "web server  2: ${vdu_ip[2]}"
   echo "load balancer: ${vdu_ip[3]}"
-  echo "monitor      : ${vdu_ip[4]}"
+  echo "firewall     : ${vdu_ip[4]}"
+  echo "monitor      : ${vdu_ip[5]}"
 }
 
 stop() {
@@ -445,7 +450,7 @@ get_vdu_ip () {
 }
 
 monitor () {
-  echo "$0: $(date) Start the VES Monitor in VDU4 - Stop first if running"
+  echo "$0: $(date) Start the VES Monitor in VDU5 - Stop first if running"
   sudo ssh -t -t -i /opt/tacker/onap-demo -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$1 << 'EOF'
 sudo kill $(ps -ef | grep evel-test-collector | awk '{print $2}')
 nohup python evel-test-collector/code/collector/monitor.py --config evel-test-collector/config/collector.conf --section default > /home/ubuntu/monitor.log &
