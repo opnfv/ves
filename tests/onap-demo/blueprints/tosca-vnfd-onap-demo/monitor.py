@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# What this is: Monitor and closed-loop policy agent as part of the OPNFV VES 
-# vHello_VES demo. 
+# What this is: Monitor and closed-loop policy agent as part of the OPNFV VES
+# ves_onap_demo.
 #
 # Status: this is a work in progress, under test.
 
@@ -36,7 +36,7 @@ import jsonschema
 from functools import partial
 
 monitor_mode = "f"
-vdu_id = ['','','','']
+vdu_id = ['','','','','','']
 summary_e = ['***** Summary of key stats *****','','','']
 summary_c = ['Collectd agents:']
 status = ['','Started','Started','Started']
@@ -222,8 +222,9 @@ def listener(environ, start_response, schema):
             start_response('202 Accepted', [])
             yield ''
     else:
-        logger.warn('Failed to authenticate OK')
-        print('Failed to authenticate agent credentials: ', credentials)
+        logger.warn('Failed to authenticate OK; creds: ' +  credentials)
+        print('Failed to authenticate agent credentials: ', credentials, 
+		  'against expected ', vel_username, ':', vel_password)
 
         #----------------------------------------------------------------------
         # Respond to the caller.
@@ -256,14 +257,15 @@ def process_event(body):
   epoch = e.event.commonEventHeader.lastEpochMicrosec
   sourceId = e.event.commonEventHeader.sourceId
 
-  report_time = time.strftime('%Y-%m-%d %H:%M:%S', 
+  report_time = time.strftime('%Y-%m-%d %H:%M:%S',
                   time.localtime(int(epoch)/1000000))
 
-  host = e.event.commonEventHeader.reportingEntityName
+  host = e.event.commonEventHeader.sourceName
   if 'VDU1' in host or 'vdu1' in host: vdu = 1
   if 'VDU2' in host or 'vdu2' in host: vdu = 2
   if 'VDU3' in host or 'vdu3' in host: vdu = 3
-  
+  if 'VDU4' in host or 'vdu4' in host: vdu = 4
+
   domain = e.event.commonEventHeader.domain
 
   if domain == 'measurementsForVfScaling':
@@ -271,22 +273,23 @@ def process_event(body):
       requestRate = e.event.measurementsForVfScalingFields.requestRate
       summary_e[vdu] = host + ": state=" + status[vdu] + ", tps=" + str(requestRate)
     else:
-      aggregateCpuUsage = e.event.measurementsForVfScalingFields.aggregateCpuUsage
-      vNicUsageArray = e.event.measurementsForVfScalingFields.vNicUsageArray
-      s = ""
-      for i in range(1,len(vdu_id)):
-        if sourceId.upper() in vdu_id[i].upper():
-          s = "(VDU"+ str(i) + ") "
-      if s:
-        s += host + ": cpu=" + str(aggregateCpuUsage)
-        found = False
-        for i in range(1,len(summary_c)):
-          if host in summary_c[i]:
-            summary_c[i] = s
-            found = True
-            break
-        if not found:
-          summary_c.extend([s])
+      for f in e.event.measurementsForVfScalingFields.additionalFields:
+        if f.name == "cpu-aggregation-cpu-average-idle-percent-value":
+          aggregateCpuUsage = 100 - float(f.value)
+          break
+#      s = ""
+#      for i in range(1,len(vdu_id)):
+#        if sourceName.upper() in vdu_id[i].upper():
+#          s = " (VDU"+ str(i) + ") "
+      s = host + ": cpu=" + aggregateCpuUsage
+      found = False
+      for c in summary_c:
+        if host in c:
+          c = s
+          found = True
+          break
+      if not found:
+        summary_c.append(s)
 
   for s in summary_e:
     print '{0}'.format(s)
@@ -448,7 +451,7 @@ USAGE
                             help='Display version information')
         parser.add_argument('-a', '--api-version',
                             dest='api_version',
-                            default='3',
+                            default='5',
                             help='set API version')
         parser.add_argument('-c', '--config',
                             dest='config',
@@ -518,7 +521,7 @@ USAGE
         #----------------------------------------------------------------------
         global logger
         print('Logfile: {0}'.format(log_file))
-        logger = logging.getLogger('collector')
+        logger = logging.getLogger('monitor')
         if verbose > 0:
             print('Verbose mode on')
             logger.setLevel(logging.DEBUG)
