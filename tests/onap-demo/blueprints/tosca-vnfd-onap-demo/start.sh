@@ -52,7 +52,9 @@ setup_collectd () {
 
   echo "$0: Install VES collectd plugin"
   git clone https://git.opnfv.org/barometer
-  sudo sed -i -- "s/v1/v3/" barometer/3rd_party/collectd-ves-plugin/ves_plugin/ves_plugin.py
+  cd barometer
+  git pull https://gerrit.opnfv.org/gerrit/barometer refs/changes/93/35293/1
+  cd ..
 
   sudo sed -i -- "s/FQDNLookup true/FQDNLookup false/" $conf
   sudo sed -i -- "s/#LoadPlugin cpu/LoadPlugin cpu/" $conf
@@ -161,6 +163,9 @@ setup_agent () {
 
   echo "$0: Clone VES repo"
   git clone https://gerrit.opnfv.org/gerrit/ves
+  cd ves
+  git pull https://gerrit.opnfv.org/gerrit/ves refs/changes/47/35247/5
+  cd ..
 
   echo "$0: Use ves_onap_demo blueprint version of agent_demo.c"
   cp ves/tests/blueprints/tosca-vnfd-onap-demo/evel_demo.c evel-library/code/evel_demo/evel_demo.c
@@ -189,7 +194,7 @@ setup_monitor () {
   echo "$0: setup VES Monitor config"
   sudo mkdir /var/log/att
   sudo chown ubuntu /var/log/att
-  touch /var/log/att/collector.log
+  touch /var/log/att/monitor.log
   sudo chown ubuntu /home/ubuntu/
   cd /home/ubuntu/
   git clone https://github.com/att/evel-test-collector.git
@@ -197,6 +202,7 @@ setup_monitor () {
   sed -i -- "s/vel_password = /vel_password = $password/" evel-test-collector/config/collector.conf
   sed -i -- "s~vel_path = vendor_event_listener/~vel_path = ~" evel-test-collector/config/collector.conf
   sed -i -- "s/vel_topic_name = example_vnf/vel_topic_name = /" evel-test-collector/config/collector.conf
+  sed -i -- "/vel_topic_name = /a vdu4_id = $vdu4_id" evel-test-collector/config/collector.conf
   sed -i -- "/vel_topic_name = /a vdu3_id = $vdu3_id" evel-test-collector/config/collector.conf
   sed -i -- "/vel_topic_name = /a vdu2_id = $vdu2_id" evel-test-collector/config/collector.conf
   sed -i -- "/vel_topic_name = /a vdu1_id = $vdu1_id" evel-test-collector/config/collector.conf
@@ -211,8 +217,9 @@ if [[ "$type" == "monitor" ]]; then
   vdu1_id=$2
   vdu2_id=$3
   vdu3_id=$4
-  username=$5
-  password=$6
+  vdu4_id=$5
+  username=$6
+  password=$7
 else
   vm_id=$2
   collector_ip=$3
