@@ -66,8 +66,8 @@ topology_template:
           sudo apt-get update
           sudo apt-get install -y docker-engine
           sudo docker pull nginx
-          sudo docker build -t vhello .
-          sudo docker run --name vHello -d -p 80:80 vhello
+          sudo docker build -t onap-demo-img .
+          sudo docker run --name onap-demo -d -p 80:80 onap-demo-img
         config: |
           param0: key1
           param1: key2
@@ -152,8 +152,8 @@ topology_template:
           sudo apt-get update
           sudo apt-get install -y docker-engine
           sudo docker pull nginx
-          sudo docker build -t vhello .
-          sudo docker run --name vHello -d -p 80:80 vhello
+          sudo docker build -t onap-demo-img .
+          sudo docker run --name onap-demo -d -p 80:80 onap-demo-img
         config: |
           param0: key1
           param1: key2
@@ -244,6 +244,7 @@ topology_template:
         image: models-xenial-server
         flavor: onap.demo
         availability_zone: nova
+        config_drive: true
         user_data_format: RAW
         user_data: |
           #!/bin/bash
@@ -254,6 +255,20 @@ topology_template:
           cat << EOM >/home/ubuntu/.ssh/authorized_keys
           <pubkey>
           EOM
+          sudo mount /dev/sr0 /mnt/
+          cat << EOF >/tmp/setup.sh
+          echo "1" | sudo tee /proc/sys/net/ipv4/ip_forward
+          sudo sysctl net.ipv4.ip_forward=1
+          sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -m state \\
+          --state NEW -m statistic --mode nth --every 1 --packet 0 \\
+          -j DNAT --to-destination <vdu3_ip>:80
+          sudo iptables -t nat -A POSTROUTING -j MASQUERADE
+          EOF
+          bash /tmp/setup.sh
+        config: |
+          param0: key1
+          param1: key2
+
         config: |
           param0: key1
           param1: key2
@@ -278,6 +293,47 @@ topology_template:
             node: VL2
         - virtualBinding:
             node: VDU4
+
+    VDU5:
+     type: tosca.nodes.nfv.VDU.Tacker
+     properties:
+       image: models-xenial-server
+       flavor: onap.demo
+       availability_zone: nova
+       user_data_format: RAW
+       user_data: |
+         #!/bin/bash
+         set -x
+         mkdir /home/ubuntu
+         chown -R ubuntu /home/ubuntu
+         mkdir /home/ubuntu/.ssh
+         cat << EOM >/home/ubuntu/.ssh/authorized_keys
+         <pubkey>
+         EOM
+       config: |
+         param0: key1
+         param1: key2
+
+    CP43:
+     type: tosca.nodes.nfv.CP.Tacker
+     properties:
+       management: true
+       anti_spoofing_protection: false
+     requirements:
+       - virtualLink:
+           node: VL1
+       - virtualBinding:
+           node: VDU5
+
+    CP44:
+     type: tosca.nodes.nfv.CP.Tacker
+     properties:
+       anti_spoofing_protection: false
+     requirements:
+       - virtualLink:
+           node: VL2
+       - virtualBinding:
+           node: VDU5
 
     VL1:
       type: tosca.nodes.nfv.VL
