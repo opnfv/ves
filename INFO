@@ -1,15 +1,14 @@
 VNF Event Stream (VES)
 Creation Date: May 31, 2016
 Lifecycle State: Incubation
-Primary Contact: ag1367@att.com
-Project Lead: ag1367@att.com
+Primary Contact: bryan.sullivan@att.com
+Project Lead: bryan.sullivan@att.com
 Jira Name: VNF Event Stream
 Jira Prefix: VES
 Mailing list tag [ves]
 Repo: ves
 
 Committers:
-ag1367@att.com
 bryan.sullivan@att.com
 
 Link to TSC approval: https://wiki.opnfv.org/wiki/tsc#february_16_2016
