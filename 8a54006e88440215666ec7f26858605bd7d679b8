@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "5aaae553_8bec36c9",
+        "filename": "tests/onap-demo/blueprints/tosca-vnfd-onap-demo/start.sh",
+        "patchSetId": 18
+      },
+      "lineNbr": 92,
+      "author": {
+        "id": 6419
+      },
+      "writtenOn": "2017-06-12T15:51:30Z",
+      "side": 1,
+      "message": "The HostnameFormat can be set to one of the values:\nname or uuid or hostname.",
+      "revId": "8a54006e88440215666ec7f26858605bd7d679b8",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    }
+  ]
+}
