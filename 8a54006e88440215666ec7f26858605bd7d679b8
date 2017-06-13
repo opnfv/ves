@@ -34,6 +34,24 @@
       "revId": "8a54006e88440215666ec7f26858605bd7d679b8",
       "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "5aaae553_c6bf85cf",
+        "filename": "tests/onap-demo/blueprints/tosca-vnfd-onap-demo/start.sh",
+        "patchSetId": 18
+      },
+      "lineNbr": 92,
+      "author": {
+        "id": 6419
+      },
+      "writtenOn": "2017-06-13T07:10:33Z",
+      "side": 1,
+      "message": "yes, you are right. The documentation says the same: \"You can also specify combinations of these fields.\", so never mind. My fault :)",
+      "parentUuid": "5aaae553_4b863ebb",
+      "revId": "8a54006e88440215666ec7f26858605bd7d679b8",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
     }
   ]
 }
