@@ -244,11 +244,12 @@ def save_event(body):
   if "VDU4" in agent: 
     agent = "firewall"
 
+  url = 'http://{}:8086/write?db=veseventsdb'.format(influxdb)
   if e.event.commonEventHeader.domain == "heartbeat":
     print('Found Heartbeat')
     pdata = 'heartbeat,system={} sequence={}'.format(agent,e.event.commonEventHeader.sequence)
     print(pdata)
-    r = requests.post("http://localhost:8086/write?db=veseventsdb", data=pdata, headers={'Content-Type': 'text/plain'})
+    r = requests.post(url, data=pdata, headers={'Content-Type': 'text/plain'})
     if r.status_code != 204:
       print('*** Failed to add cpu event to influxdb ***')
 
@@ -271,7 +272,7 @@ def save_event(body):
 
       pdata = 'cpu,system={},cpuid={} cpuuser={},cpusystem={},cpuidle={}'.format(agent,jobj['event']['measurementsForVfScalingFields']['cpuUsageArray'][0]['cpuIdentifier'], aggregateCpuUsageUser,aggregateCpuUsageSystem,aggregateCpuIdle)
       print(pdata)
-      r = requests.post("http://localhost:8086/write?db=veseventsdb", data=pdata, headers={'Content-Type': 'text/plain'})
+      r = requests.post(url, data=pdata, headers={'Content-Type': 'text/plain'})
       if r.status_code != 204:
         print('*** Failed to add cpu event to influxdb ***')
 
@@ -281,7 +282,7 @@ def save_event(body):
       for vnic in e.event.measurementsForVfScalingFields.vNicPerformanceArray:
         pdata = 'vnic,system={},vnicn={},vnicid={} txoctets={},rxpacketsacc={},rxoctetsacc={},txpacketacc={}'.format(agent,vnicn,vnic.vNicIdentifier,vnic.transmittedOctetsAccumulated,vnic.receivedTotalPacketsAccumulated,vnic.receivedOctetsAccumulated,vnic.transmittedTotalPacketsAccumulated)
         print(pdata)
-        r = requests.post("http://localhost:8086/write?db=veseventsdb", data=pdata, headers={'Content-Type': 'text/plain'})
+        r = requests.post(url, data=pdata, headers={'Content-Type': 'text/plain'})
         if r.status_code != 204:
           print('*** Failed to add vnic event to influxdb ***')
         vnicn = vnicn + 1
@@ -291,7 +292,7 @@ def save_event(body):
       vnic = e.event.measurementsForVfScalingFields.vNicUsageArray[0]
       pdata = 'vnic,system={},vnicid={} txoctets={},rxpacketsacc={},rxoctetsacc={},txpacketacc={}'.format(agent,vnic.vNicIdentifier,vnic.transmittedOctetsAccumulated,vnic.receivedTotalPacketsAccumulated,vnic.receivedOctetsAccumulated,vnic.transmittedTotalPacketsAccumulated)
       print(pdata)
-      r = requests.post("http://localhost:8086/write?db=veseventsdb", data=pdata, headers={'Content-Type': 'text/plain'})
+      r = requests.post(url, data=pdata, headers={'Content-Type': 'text/plain'})
       if r.status_code != 204:
         print('*** Failed to add vnic event to influxdb ***')
 
@@ -299,7 +300,7 @@ def save_event(body):
       print('Found requestRate')
       pdata = 'http,system={} httptxrx={}'.format(agent,e.event.measurementsForVfScalingFields.requestRate)
       print(pdata)
-      r = requests.post("http://localhost:8086/write?db=veseventsdb", data=pdata, headers={'Content-Type': 'text/plain'})
+      r = requests.post(url, data=pdata, headers={'Content-Type': 'text/plain'})
       if r.status_code != 204:
         print('*** Failed to add http event to influxdb ***')
 
@@ -502,6 +503,10 @@ USAGE
         #----------------------------------------------------------------------
         parser = ArgumentParser(description=program_license,
                                 formatter_class=ArgumentDefaultsHelpFormatter)
+        parser.add_argument('-i', '--influxdb',
+                            dest='influxdb',
+                            default='localhost',
+                            help='InfluxDB server addresss')
         parser.add_argument('-v', '--verbose',
                             dest='verbose',
                             action='count',
