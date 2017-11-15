@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9a3d3df0_65ae3587",
+        "filename": "tools/ves-setup.sh",
+        "patchSetId": 6
+      },
+      "lineNbr": 231,
+      "author": {
+        "id": 304
+      },
+      "writtenOn": "2017-11-15T13:12:32Z",
+      "side": 1,
+      "message": "all the virt plugins are merged into collectd master - no need to clone that github... and is enabled in the barometer src build.",
+      "range": {
+        "startLine": 231,
+        "startChar": 3,
+        "endLine": 231,
+        "endChar": 70
+      },
+      "revId": "c40be26f0586fa931c986e2eea40477c524d381d",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9a3d3df0_45a9717a",
+        "filename": "tools/ves-setup.sh",
+        "patchSetId": 6
+      },
+      "lineNbr": 240,
+      "author": {
+        "id": 304
+      },
+      "writtenOn": "2017-11-15T13:12:32Z",
+      "side": 1,
+      "message": "double checking this - I think it\u0027s a typo in the usability guide",
+      "range": {
+        "startLine": 239,
+        "startChar": 6,
+        "endLine": 240,
+        "endChar": 48
+      },
+      "revId": "c40be26f0586fa931c986e2eea40477c524d381d",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    }
+  ]
+}
