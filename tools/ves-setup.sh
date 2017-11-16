@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#. What this is: Setup script for VES agent framework.
+#. What this is: Setup script for the VES monitoring framework.
 #. With this script VES support can be installed in one or more hosts, with:
 #. - a dedicated or shared Kafka server for collection of events from collectd
 #. - VES collectd agents running in host or guest mode
@@ -23,6 +23,7 @@
 #.    pre-installed VES collector e.g. from the ONAP project.
 #.  - Install Kafka server on one of the hosts, or use a pre-installed server
 #.    accessible from the agent hosts.
+#.  - Install collectd on each host.
 #.  - Install the VES agent on each host.
 #.  - As needed, install the VES agent on each virtual host. This could include
 #.    pre-installed VES agents in VM or container images, which are configured
@@ -48,20 +49,12 @@
 #.
 #. Usage:
 #.   wget https://raw.githubusercontent.com/opnfv/ves/master/tools/ves-setup.sh
-#.   bash ves-setup.sh <collector|kafka|agent>
+#.   bash ves-setup.sh <collector|kafka|collectd|agent>
 #.     collector: setup VES collector (test collector) 
 #.     kafka: setup kafka server for VES events from collect agent(s)
-#.     agent: setup VES agent in host or guest mode
-#.   Recommended sequence is:
-#.     ssh into your collector host and run these commands:
-#.     $ ves_host=$(ip route get 8.8.8.8 | awk '{print $NF; exit}') 
-#.     $ export ves_host
-#.     $ bash ves-setup.sh collector 
-#.   ...then for each agent host:
-#.     copy ~/ves_env.sh and ves-setup.sh to the host e.g. via scp
-#.     ssh into the host and run, directly or via ssh -x
-#.     $ bash ves-setup.sh kafka
-#.     $ bash ves-setup.sh agent
+#.     collectd: setup collectd with libvirt plugin, as a kafka publisher
+#.     agent: setup VES agent in host or guest mode, as a kafka consumer
+#.   See demo_deploy.sh in this repo for a recommended sequence of the above.
 #.
 #. Status: this is a work in progress, under test.
 
@@ -88,8 +81,10 @@ function common_prereqs() {
 }
 
 function setup_env() {
-  if [[ ! -f ~/ves_env.sh ]]; then
-    cat <<EOF >~/ves_env.sh
+  if [[ ! -d /tmp/ves ]]; then mkdir /tmp/ves; fi
+  cp $0 /tmp/ves
+  if [[ ! -f /tmp/ves/ves_env.sh ]]; then
+    cat <<EOF >/tmp/ves/ves_env.sh
 #!/bin/bash
 ves_mode="${ves_mode:=host}"
 ves_host="${ves_host:=127.0.0.1}"
@@ -117,7 +112,7 @@ export ves_port
 export ves_kafka_port
 EOF
   fi
-  source ~/ves_env.sh
+  source /tmp/ves/ves_env.sh
 }
 
 function setup_kafka() {
@@ -141,15 +136,7 @@ function setup_kafka() {
   # ~/kafka_2.11-0.11.0.0/bin/kafka-console-consumer.sh --zookeeper localhost:2181 --topic TopicTest --from-beginning
 }
 
-function setup_agent() {
-  log "setup agent"
-  common_prereqs
-
-  log "cleanup any previous failed install"
-  sudo rm -rf ~/collectd-virt
-  sudo rm -rf ~/librdkafka
-  sudo rm -rf ~/collectd
-
+function setup_kafka_client() {
   log "Install Apache Kafka C/C++ client library"
   sudo apt-get install -y build-essential
   git clone https://github.com/edenhill/librdkafka.git ~/librdkafka
@@ -163,6 +150,18 @@ function setup_agent() {
   ./configure --prefix=/usr
   make
   sudo make install
+}
+
+function setup_collectd() {
+  log "setup collectd"
+  common_prereqs
+
+  log "cleanup any previous failed install"
+  sudo rm -rf ~/collectd-virt
+  sudo rm -rf ~/librdkafka
+  sudo rm -rf ~/collectd
+
+  setup_kafka_client
 
   log "Build collectd with Kafka support"
   git clone https://github.com/collectd/collectd.git ~/collectd
@@ -197,26 +196,6 @@ function setup_agent() {
   log "install VES agent prerequisites"
   sudo pip install pyyaml
 
-  log "clone OPNFV Barometer"
-  git clone https://gerrit.opnfv.org/gerrit/barometer ~/barometer
-
-  log "setup ves_app_config.conf"
-  cd ~/barometer/3rd_party/collectd-ves-app/ves_app
-  cat <<EOF >ves_app_config.conf
-[config]
-Domain = $ves_host
-Port = $ves_port
-Path = $ves_path
-Topic = $ves_topic
-UseHttps = $ves_https
-Username = $ves_user
-Password = $ves_pass
-SendEventInterval = $ves_interval
-ApiVersion = $ves_version
-KafkaPort = $ves_kafka_port
-KafkaBroker = $ves_kafka_host
-EOF
-
   log "setup VES collectd config for VES $ves_mode mode"
   if [[ "$ves_mode" == "host" ]]; then
     # TODO: Barometer VES guide to clarify prerequisites install for Ubuntu
@@ -234,11 +213,6 @@ EOF
     ./configure --enable-syslog --enable-logfile --enable-debug
     make
     sudo make install
-
-
-    # TODO: Barometer VES guide refers to "At least one VM instance should be 
-    # up and running by hypervisor on the host." The process needs to accomodate
-    # pre-installation of the VES agent *prior* to the first VM being created. 
 
     cat <<EOF | sudo tee -a /opt/collectd/etc/collectd.conf
 LoadPlugin logfile
@@ -280,15 +254,6 @@ LoadPlugin logfile
 
 LoadPlugin cpu
 
-#LoadPlugin virt
-#<Plugin virt>
-#  Connection "qemu:///system"
-#  RefreshInterval 60
-#  HostnameFormat uuid
-#  PluginInstanceFormat name
-#  ExtraStats "cpu_util"
-#</Plugin>
-
 LoadPlugin write_kafka
 <Plugin write_kafka>
   Property "metadata.broker.list" "$ves_kafka_host:$ves_kafka_port"
@@ -301,12 +266,47 @@ EOF
 
   log "restart collectd to apply updated config"
   sudo systemctl restart collectd
+}
 
-  log "start VES agent"
-  cd ~/barometer/3rd_party/collectd-ves-app/ves_app
-  nohup python ves_app.py \
-    --events-schema=$ves_mode.yaml \
-    --config=ves_app_config.conf > ~/ves_app.stdout.log 2>&1 &
+function setup_agent() {
+  log "setup VES agent"
+  if [[ ! -f /.dockerenv ]]; then
+    sudo docker run -it -d -v /tmp/ves:/opt/ves --name=ves-agent \
+    ubuntu:xenial /bin/bash
+    sudo docker exec -it -d ves-agent bash /opt/ves/setup-ves.sh agent
+  else
+    common_prereqs
+
+    setup_kafka_client
+
+    log "clone OPNFV Barometer"
+    git clone https://gerrit.opnfv.org/gerrit/barometer /opt/ves/barometer
+
+    log "setup ves_app_config.conf"
+    cd /opt/ves/barometer/3rd_party/collectd-ves-app/ves_app
+    cat <<EOF >ves_app_config.conf
+[config]
+Domain = $ves_host
+Port = $ves_port
+Path = $ves_path
+Topic = $ves_topic
+UseHttps = $ves_https
+Username = $ves_user
+Password = $ves_pass
+SendEventInterval = $ves_interval
+ApiVersion = $ves_version
+KafkaPort = $ves_kafka_port
+KafkaBroker = $ves_kafka_host
+EOF
+
+#    log "add guest.yaml measurements to host.yaml (enables actual host data)"
+#    tail --lines=+24 guest.yaml >>host.yaml
+
+    log "start VES agent"
+    nohup python ves_app.py \
+      --events-schema=$ves_mode.yaml --loglevel ERROR \
+      --config=ves_app_config.conf > ~/ves_app.stdout.log 2>&1 &
+  fi
 }
 
 function setup_collector() {
@@ -316,27 +316,17 @@ function setup_collector() {
 
   ves_host=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
   export ves_host
-  setup_env
-
-  echo "cleanup any earlier install attempts"
-  sudo docker stop influxdb
-  sudo docker rm influxdb
-  sudo docker stop grafana
-  sudo docker rm grafana
-  sudo docker stop ves-collector
-  sudo docker rm -v ves-collector
-  sudo rm -rf /tmp/ves
 
   log "clone OPNFV VES"
   git clone https://gerrit.opnfv.org/gerrit/ves /tmp/ves
 
   log "setup influxdb container"
-  sudo docker run -d --name=influxdb -p 8086:8086 influxdb
-  status=$(sudo docker inspect influxdb | jq -r '.[0].State.Status')
+  sudo docker run -d --name=ves-influxdb -p 8086:8086 influxdb
+  status=$(sudo docker inspect ves-influxdb | jq -r '.[0].State.Status')
   while [[ "x$status" != "xrunning" ]]; do
     log "InfluxDB container state is ($status)"
     sleep 10
-    status=$(sudo docker inspect influxdb | jq -r '.[0].State.Status')
+    status=$(sudo docker inspect ves-influxdb | jq -r '.[0].State.Status')
   done
   log "InfluxDB container state is $status"
 
@@ -351,17 +341,17 @@ function setup_collector() {
     --data-urlencode "q=CREATE DATABASE veseventsdb"
 
   log "install Grafana container"
-  sudo docker run -d --name grafana -p 3000:3000 grafana/grafana
-  status=$(sudo docker inspect grafana | jq -r '.[0].State.Status')
+  sudo docker run -d --name ves-grafana -p 3001:3000 grafana/grafana
+  status=$(sudo docker inspect ves-grafana | jq -r '.[0].State.Status')
   while [[ "x$status" != "xrunning" ]]; do
     log "Grafana container state is ($status)"
     sleep 10
-    status=$(sudo docker inspect grafana | jq -r '.[0].State.Status')
+    status=$(sudo docker inspect ves-grafana | jq -r '.[0].State.Status')
   done
   log "Grafana container state is $status"
 
   log "wait for Grafana API to be active"
-  while ! curl http://$ves_host:3000 ; do
+  while ! curl http://$ves_host:3001 ; do
     log "Grafana API is not yet responding... waiting 10 seconds"
     sleep 10
   done
@@ -386,13 +376,13 @@ EOF
 
   curl -H "Accept: application/json" -H "Content-type: application/json" \
     -X POST -d @datasource.json \
-    http://admin:admin@$ves_host:3000/api/datasources
+    http://admin:admin@$ves_host:3001/api/datasources
 
   log "add VES dashboard to Grafana"
   curl -H "Accept: application/json" -H "Content-type: application/json" \
     -X POST \
-    -d @/tmp/ves/tests/onap-demo/blueprints/tosca-vnfd-onap-demo/Dashboard.json\
-    http://admin:admin@$ves_host:3000/api/dashboards/db	
+    -d @/tmp/ves/tools/grafana/Dashboard.json\
+    http://admin:admin@$ves_host:3001/api/dashboards/db	
 
   log "setup collector container"
   cd /tmp/ves
@@ -412,7 +402,7 @@ EOF
   sed -i -- "s~vel_topic_name = example_vnf~vel_topic_name = $ves_topic~g" \
     evel-test-collector/config/collector.conf
 
-  cp tests/onap-demo/blueprints/tosca-vnfd-onap-demo/monitor.py \
+  cp tools/monitor.py \
     evel-test-collector/code/collector/monitor.py
 
   # Note below: python (2.7) is required due to dependency on module 'ConfigParser'
@@ -446,6 +436,9 @@ if [[ $(grep -c $HOSTNAME /etc/hosts) -eq 0 ]]; then
 fi
 
 case "$1" in
+  "collectd")
+    setup_collectd
+    ;;
   "agent")
     setup_agent
     ;;
