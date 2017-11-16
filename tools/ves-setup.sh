@@ -197,26 +197,6 @@ function setup_agent() {
   log "install VES agent prerequisites"
   sudo pip install pyyaml
 
-  log "clone OPNFV Barometer"
-  git clone https://gerrit.opnfv.org/gerrit/barometer ~/barometer
-
-  log "setup ves_app_config.conf"
-  cd ~/barometer/3rd_party/collectd-ves-app/ves_app
-  cat <<EOF >ves_app_config.conf
-[config]
-Domain = $ves_host
-Port = $ves_port
-Path = $ves_path
-Topic = $ves_topic
-UseHttps = $ves_https
-Username = $ves_user
-Password = $ves_pass
-SendEventInterval = $ves_interval
-ApiVersion = $ves_version
-KafkaPort = $ves_kafka_port
-KafkaBroker = $ves_kafka_host
-EOF
-
   log "setup VES collectd config for VES $ves_mode mode"
   if [[ "$ves_mode" == "host" ]]; then
     # TODO: Barometer VES guide to clarify prerequisites install for Ubuntu
@@ -302,11 +282,34 @@ EOF
   log "restart collectd to apply updated config"
   sudo systemctl restart collectd
 
-  log "start VES agent"
+  log "clone OPNFV Barometer"
+  git clone https://gerrit.opnfv.org/gerrit/barometer ~/barometer
+
+  log "setup ves_app_config.conf"
   cd ~/barometer/3rd_party/collectd-ves-app/ves_app
+  cat <<EOF >ves_app_config.conf
+[config]
+Domain = $ves_host
+Port = $ves_port
+Path = $ves_path
+Topic = $ves_topic
+UseHttps = $ves_https
+Username = $ves_user
+Password = $ves_pass
+SendEventInterval = $ves_interval
+ApiVersion = $ves_version
+KafkaPort = $ves_kafka_port
+KafkaBroker = $ves_kafka_host
+EOF
+
+  log "add guest.yaml measurements to host.yaml (enables actual host data)"
+  tail --lines=+24 guest.yaml >>host.yaml
+
+  log "start VES agent"
   nohup python ves_app.py \
     --events-schema=$ves_mode.yaml \
     --config=ves_app_config.conf > ~/ves_app.stdout.log 2>&1 &
+python ves_app.py --events-schema=host.yaml --config=ves_app_config.conf --loglevel DEBUG --logfile ~/ves_app.stdout.log
 }
 
 function setup_collector() {
@@ -391,7 +394,7 @@ EOF
   log "add VES dashboard to Grafana"
   curl -H "Accept: application/json" -H "Content-type: application/json" \
     -X POST \
-    -d @/tmp/ves/tests/onap-demo/blueprints/tosca-vnfd-onap-demo/Dashboard.json\
+    -d @/tmp/ves/tools/grafana/Dashboard.json\
     http://admin:admin@$ves_host:3000/api/dashboards/db	
 
   log "setup collector container"
@@ -412,7 +415,7 @@ EOF
   sed -i -- "s~vel_topic_name = example_vnf~vel_topic_name = $ves_topic~g" \
     evel-test-collector/config/collector.conf
 
-  cp tests/onap-demo/blueprints/tosca-vnfd-onap-demo/monitor.py \
+  cp tools/monitor.py \
     evel-test-collector/code/collector/monitor.py
 
   # Note below: python (2.7) is required due to dependency on module 'ConfigParser'
