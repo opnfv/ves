@@ -276,7 +276,7 @@ EOF
   if [[ $(grep -c $ves_hostname /etc/hosts) -eq 0 ]]; then
     log "add to /etc/hosts: $ves_kafka_host $ves_hostname"
     echo "$ves_kafka_host $ves_hostname" | sudo tee -a /etc/hosts
-
+  fi
   log "restart collectd to apply updated config"
   sudo systemctl restart collectd
 }
