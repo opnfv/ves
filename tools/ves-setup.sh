@@ -127,7 +127,7 @@ function setup_kafka() {
   common_prereqs
   setup_env
 
-  cd
+  cd /tmp/ves
   ver="0.11.0.2"
   log "get and unpack kafka_2.11-$ver.tgz"
   wget "http://www-eu.apache.org/dist/kafka/$ver/kafka_2.11-$ver.tgz"
