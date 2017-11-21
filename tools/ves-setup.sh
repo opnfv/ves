@@ -34,7 +34,7 @@
 #. - Ubuntu Xenial (Centos support to be provided)
 #. - passwordless sudo setup for user running this script
 #. - shell environment variables setup as below (for non-default setting)
-#.   ves_mode: install mode (host|guest) for VES collectd plugin (default: host)
+#.   ves_mode: install mode (node|guest) for VES collectd plugin (default: node)
 #.   ves_host: VES collector IP or hostname (default: 127.0.0.1)
 #.   ves_port: VES collector port (default: 30000)
 #.   ves_path: REST path optionalRoutingPath element (default: empty)
@@ -92,7 +92,7 @@ function setup_env() {
   if [[ ! -f /tmp/ves/ves_env.sh ]]; then
     cat <<EOF >/tmp/ves/ves_env.sh
 #!/bin/bash
-ves_mode="${ves_mode:=host}"
+ves_mode="${ves_mode:=node}"
 ves_host="${ves_host:=127.0.0.1}"
 ves_hostname="${ves_hostname:=localhost}"
 ves_port="${ves_port:=30000}"
@@ -203,7 +203,7 @@ function setup_collectd() {
   sudo systemctl start collectd.service
 
   log "setup VES collectd config for VES $ves_mode mode"
-  if [[ "$ves_mode" == "host" ]]; then
+  if [[ "$ves_mode" == "node" ]]; then
     # TODO: Barometer VES guide to clarify prerequisites install for Ubuntu
     log "setup additional prerequisites for VES host mode"
     sudo apt-get install -y libxml2-dev libpciaccess-dev libyajl-dev \
@@ -213,6 +213,8 @@ function setup_collectd() {
     # http://docs.opnfv.org/en/latest/submodules/barometer/docs/release/userguide/feature.userguide.html#virt-plugin
     sudo systemctl start libvirtd
 
+    # TODO: supposed to be merged with main collectd repo, but without this
+    # collectd still fails "plugin_load: Could not find plugin "virt" in /opt/collectd/lib/collectd" 
     rm -rf /tmp/ves/collectd-virt
     git clone https://github.com/maryamtahhan/collectd /tmp/ves/collectd-virt
     cd /tmp/ves/collectd-virt
@@ -221,17 +223,24 @@ function setup_collectd() {
     make
     sudo make install
 
+    # TODO: fix for journalctl -xe report "... is marked executable"
+    sudo chmod 744 /etc/systemd/system/collectd.service
+
     cat <<EOF | sudo tee -a /opt/collectd/etc/collectd.conf
 # for VES plugin
 LoadPlugin logfile
 <Plugin logfile>
-  LogLevel info
-  File "/opt/collectd/var/log/collectd.log"
+  LogLevel debug
+  File STDOUT
   Timestamp true
   PrintSeverity false
 </Plugin>
 
-LoadPlugin cpu
+LoadPlugin csv
+<Plugin csv>
+ DataDir "/work-dir/collectd/install/var/lib/csv"
+ StoreRates false
+</Plugin>
 
 #LoadPlugin virt
 #<Plugin virt>
@@ -241,6 +250,32 @@ LoadPlugin cpu
 #  PluginInstanceFormat name
 #  ExtraStats "cpu_util"
 #</Plugin>
+
+LoadPlugin target_set
+LoadPlugin match_regex
+<Chain "PreCache">
+  <Rule "mark_memory_as_host">
+    <Match "regex">
+      Plugin "^memory$"
+    </Match>
+    <Target "set">
+      PluginInstance "host"
+    </Target>
+  </Rule>
+</Chain>
+
+LoadPlugin cpu
+<Plugin cpu>
+  ReportByCpu true
+  ReportByState true
+  ValuesPercentage true
+</Plugin>
+
+LoadPlugin interface
+LoadPlugin memory
+LoadPlugin load
+LoadPlugin disk
+LoadPlugin uuid
 
 LoadPlugin write_kafka
 <Plugin write_kafka>
@@ -255,13 +290,29 @@ EOF
 # for VES plugin
 LoadPlugin logfile
 <Plugin logfile>
-  LogLevel info
-  File "/opt/collectd/var/log/collectd.log"
+  LogLevel debug
+  File STDOUT
   Timestamp true
   PrintSeverity false
 </Plugin>
 
 LoadPlugin cpu
+<Plugin cpu>
+  ReportByCpu true
+  ReportByState true
+  ValuesPercentage true
+</Plugin>
+
+LoadPlugin csv
+<Plugin csv>
+        DataDir "/tmp"
+</Plugin>
+
+LoadPlugin interface
+LoadPlugin memory
+LoadPlugin load
+LoadPlugin disk
+LoadPlugin uuid
 
 LoadPlugin write_kafka
 <Plugin write_kafka>
@@ -270,6 +321,19 @@ LoadPlugin write_kafka
     Format JSON
   </Topic>
 </Plugin>
+
+LoadPlugin target_set
+LoadPlugin match_regex
+<Chain "PreCache">
+  <Rule "mark_memory_as_guest">
+    <Match "regex">
+      Plugin "^memory$"
+    </Match>
+    <Target "set">
+      PluginInstance "guest"
+    </Target>
+  </Rule>
+</Chain>
 EOF
   fi
 
@@ -301,6 +365,9 @@ function setup_agent() {
     log "clone OPNFV Barometer"
     rm -rf /opt/ves/barometer
     git clone https://gerrit.opnfv.org/gerrit/barometer /opt/ves/barometer
+    # Test patch
+    cd /opt/ves/barometer
+    git fetch https://gerrit.opnfv.org/gerrit/barometer refs/changes/27/47427/1 && git checkout FETCH_HEAD
 
     log "setup ves_app_config.conf"
     source /opt/ves/ves_env.sh

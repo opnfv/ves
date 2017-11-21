@@ -1,5 +1,6 @@
 {
 "dashboard": {
+  "description": "This Dashboard provides a general overview of a host, with templating to select the hostname.",
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
@@ -55,36 +56,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "alias": "CpuUser",
-              "dsType": "influxdb",
-              "groupBy": [
-                {
-                  "params": [
-                    "system"
-                  ],
-                  "type": "tag"
-                }
-              ],
-              "measurement": "load",
-              "orderByTime": "ASC",
-              "policy": "default",
-              "query": "SELECT mean(\"cpuuser\") FROM \"cpu\" WHERE \"system\" = 'computehost' AND $timeFilter GROUP BY time(1m) fill(null)",
-              "refId": "A",
-              "resultFormat": "time_series",
-              "select": [
-                [
-                  {
-                    "params": [
-                      "load-longterm"
-                    ],
-                    "type": "field"
-                  }
-                ]
-              ],
-              "tags": []
-            },
-            {
-              "alias": "CpuSystem",
+              "alias": "",
               "dsType": "influxdb",
               "groupBy": [
                 {
@@ -113,43 +85,8 @@
               "tags": [
                 {
                   "key": "system",
-                  "operator": "=",
-                  "value": "OPNFV01"
-                }
-              ]
-            },
-            {
-              "alias": "CpuIdle",
-              "dsType": "influxdb",
-              "groupBy": [
-                {
-                  "params": [
-                    "system"
-                  ],
-                  "type": "tag"
-                }
-              ],
-              "measurement": "load",
-              "orderByTime": "ASC",
-              "policy": "default",
-              "query": "SELECT mean(\"cpuidle\") FROM \"cpu\" WHERE $timeFilter GROUP BY time(1m) fill(null)",
-              "refId": "C",
-              "resultFormat": "time_series",
-              "select": [
-                [
-                  {
-                    "params": [
-                      "load-midterm"
-                    ],
-                    "type": "field"
-                  }
-                ]
-              ],
-              "tags": [
-                {
-                  "key": "system",
-                  "operator": "=",
-                  "value": "OPNFV01"
+                  "operator": "=~",
+                  "value": "/^$host$/"
                 }
               ]
             }
@@ -228,7 +165,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "alias": "Free",
+              "alias": "",
               "dsType": "influxdb",
               "groupBy": [
                 {
@@ -253,147 +190,13 @@
                   }
                 ]
               ],
-              "tags": []
-            },
-            {
-              "alias": "Used",
-              "dsType": "influxdb",
-              "groupBy": [
+              "tags": [
                 {
-                  "params": [
-                    "system"
-                  ],
-                  "type": "tag"
+                  "key": "system",
+                  "operator": "=~",
+                  "value": "/^$host$/"
                 }
-              ],
-              "measurement": "memoryUsage",
-              "orderByTime": "ASC",
-              "policy": "autogen",
-              "refId": "B",
-              "resultFormat": "time_series",
-              "select": [
-                [
-                  {
-                    "params": [
-                      "memoryUsed"
-                    ],
-                    "type": "field"
-                  }
-                ]
-              ],
-              "tags": []
-            },
-            {
-              "alias": "Buffered",
-              "dsType": "influxdb",
-              "groupBy": [
-                {
-                  "params": [
-                    "system"
-                  ],
-                  "type": "tag"
-                }
-              ],
-              "measurement": "memoryUsage",
-              "orderByTime": "ASC",
-              "policy": "autogen",
-              "refId": "C",
-              "resultFormat": "time_series",
-              "select": [
-                [
-                  {
-                    "params": [
-                      "memoryBuffered"
-                    ],
-                    "type": "field"
-                  }
-                ]
-              ],
-              "tags": []
-            },
-            {
-              "alias": "Cached",
-              "dsType": "influxdb",
-              "groupBy": [
-                {
-                  "params": [
-                    "system"
-                  ],
-                  "type": "tag"
-                }
-              ],
-              "measurement": "memoryUsage",
-              "orderByTime": "ASC",
-              "policy": "autogen",
-              "refId": "D",
-              "resultFormat": "time_series",
-              "select": [
-                [
-                  {
-                    "params": [
-                      "memoryCached"
-                    ],
-                    "type": "field"
-                  }
-                ]
-              ],
-              "tags": []
-            },
-            {
-              "alias": "SlabRecl",
-              "dsType": "influxdb",
-              "groupBy": [
-                {
-                  "params": [
-                    "system"
-                  ],
-                  "type": "tag"
-                }
-              ],
-              "measurement": "memoryUsage",
-              "orderByTime": "ASC",
-              "policy": "autogen",
-              "refId": "E",
-              "resultFormat": "time_series",
-              "select": [
-                [
-                  {
-                    "params": [
-                      "memorySlabRecl"
-                    ],
-                    "type": "field"
-                  }
-                ]
-              ],
-              "tags": []
-            },
-            {
-              "alias": "SlabUnrecl",
-              "dsType": "influxdb",
-              "groupBy": [
-                {
-                  "params": [
-                    "system"
-                  ],
-                  "type": "tag"
-                }
-              ],
-              "measurement": "memoryUsage",
-              "orderByTime": "ASC",
-              "policy": "autogen",
-              "refId": "F",
-              "resultFormat": "time_series",
-              "select": [
-                [
-                  {
-                    "params": [
-                      "memorySlabUnrecl"
-                    ],
-                    "type": "field"
-                  }
-                ]
-              ],
-              "tags": []
+              ]
             }
           ],
           "thresholds": [],
@@ -442,43 +245,9 @@
     },
     {
       "collapse": false,
-      "height": 250,
+      "height": 433,
       "panels": [
         {
-          "alert": {
-            "conditions": [
-              {
-                "evaluator": {
-                  "params": [
-                    15000000
-                  ],
-                  "type": "gt"
-                },
-                "operator": {
-                  "type": "and"
-                },
-                "query": {
-                  "params": [
-                    "A",
-                    "1s",
-                    "now"
-                  ]
-                },
-                "reducer": {
-                  "params": [],
-                  "type": "avg"
-                },
-                "type": "query"
-              }
-            ],
-            "executionErrorState": "alerting",
-            "frequency": "1s",
-            "handler": 1,
-            "message": "Transmitted Traffic Exceeded limits\nClosed Loop Action:Apply Firewall Rules",
-            "name": "VES webserver_1 Network Usage alert",
-            "noDataState": "no_data",
-            "notifications": []
-          },
           "aliasColors": {},
           "bars": false,
           "dashLength": 10,
@@ -496,7 +265,7 @@
           "id": 2,
           "interval": "30s",
           "legend": {
-            "alignAsTable": false,
+            "alignAsTable": true,
             "avg": true,
             "current": false,
             "max": false,
@@ -521,7 +290,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "alias": "rxOctets",
+              "alias": "",
               "dsType": "influxdb",
               "groupBy": [
                 {
@@ -547,13 +316,19 @@
                 [
                   {
                     "params": [
-                      "receivedOctetsAccumulated"
+                      "receivedTotalPacketsAccumulated"
                     ],
                     "type": "field"
                   }
                 ]
               ],
-              "tags": []
+              "tags": [
+                {
+                  "key": "system",
+                  "operator": "=~",
+                  "value": "/^$host$/"
+                }
+              ]
             }
           ],
           "thresholds": [],
@@ -562,7 +337,7 @@
           "title": "Received Octets",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -616,7 +391,7 @@
           "id": 4,
           "interval": "30s",
           "legend": {
-            "alignAsTable": false,
+            "alignAsTable": true,
             "avg": true,
             "current": false,
             "max": false,
@@ -641,7 +416,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "alias": "txOctets",
+              "alias": "",
               "dsType": "influxdb",
               "groupBy": [
                 {
@@ -666,13 +441,19 @@
                 [
                   {
                     "params": [
-                      "transmittedOctetsAccumulated"
+                      "receivedOctetsAccumulated"
                     ],
                     "type": "field"
                   }
                 ]
               ],
-              "tags": []
+              "tags": [
+                {
+                  "key": "system",
+                  "operator": "=~",
+                  "value": "/^$host$/"
+                }
+              ]
             }
           ],
           "thresholds": [],
@@ -681,7 +462,7 @@
           "title": "Transmitted Octets",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -730,7 +511,60 @@
   "style": "dark",
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "allValue": null,
+        "current": {
+          "tags": [],
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": "VESEvents",
+        "hide": 0,
+        "includeAll": true,
+        "label": "host",
+        "multi": true,
+        "name": "host",
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "4C4C4544-004C-4E10-8054-B6C04F475831",
+            "value": "4C4C4544-004C-4E10-8054-B6C04F475831"
+          },
+          {
+            "selected": false,
+            "text": "4C4C4544-004C-4E10-8057-B6C04F475831",
+            "value": "4C4C4544-004C-4E10-8057-B6C04F475831"
+          },
+          {
+            "selected": false,
+            "text": "4C4C4544-004C-5010-8053-B6C04F475831",
+            "value": "4C4C4544-004C-5010-8053-B6C04F475831"
+          },
+          {
+            "selected": false,
+            "text": "4C4C4544-004E-3110-8051-C3C04F445631",
+            "value": "4C4C4544-004E-3110-8051-C3C04F445631"
+          }
+        ],
+        "query": "SHOW TAG VALUES WITH KEY=system",
+        "refresh": 0,
+        "regex": "",
+        "sort": 0,
+        "tagValuesQuery": "",
+        "tags": [],
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
+      }
+    ]
   },
   "time": {
     "from": "now-30m",
@@ -758,6 +592,6 @@
   },
   "timezone": "browser",
   "title": "VES Demo",
-  "version": 3
+  "version": 2
 }
 }
