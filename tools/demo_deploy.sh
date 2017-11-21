@@ -47,7 +47,7 @@ if [[ "$1" == "master" ]]; then
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$node <<EOF
   ves_host="$master"
   export ves_host
-  ves_mode="guest"
+  ves_mode="node"
   export ves_mode
   ves_user="hello"
   export ves_user
