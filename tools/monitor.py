@@ -291,6 +291,60 @@ def save_event(body):
         pdata = pdata[:i] + ' ' + pdata[i+1:]
         send_to_influxdb("systemLoad", pdata)
 
+#            "cpuUsageArray": [
+#                {
+#                    "cpuIdentifier": "15",
+#                    "cpuIdle": 99.8998998999,
+#                    "cpuUsageInterrupt": 0,
+#                    "cpuUsageNice": 0,
+#                    "cpuUsageSoftIrq": 0,
+#                    "cpuUsageSteal": 0,
+#                    "cpuUsageSystem": 0,
+#                    "cpuUsageUser": 0.1001001001,
+#                    "cpuWait": 0,
+#                    "percentUsage": 0.0
+#                },
+
+    if 'cpuUsageArray' in jobj['event']['measurementsForVfScalingFields']:
+      print('Found diskUsageArray')
+      for disk in jobj['event']['measurementsForVfScalingFields']['cpuUsageArray']:
+        id=disk['cpuIdentifier']
+        pdata = 'cpuUsage,system={},cpu={}'.format(source,id)
+        d = disk.items()
+        for key,val in d:
+          if key != 'cpuIdentifier':
+            pdata = pdata + ',{}={}'.format(key,val)
+        i=pdata.find(',', pdata.find('cpu='))
+        pdata = pdata[:i] + ' ' + pdata[i+1:]
+        send_to_influxdb("cpuUsage", pdata)
+
+#            "diskUsageArray": [
+#                {
+#                    "diskIdentifier": "sda",
+#                    "diskIoTimeLast": 0.3996139893,
+#                    "diskMergedReadLast": 0,
+#                    "diskMergedWriteLast": 26.1747155344,
+#                    "diskOctetsReadLast": 0,
+#                    "diskOctetsWriteLast": 309767.93302,
+#                    "diskOpsReadLast": 0,
+#                    "diskOpsWriteLast": 10.9893839563,
+#                    "diskTimeReadLast": 0,
+#                    "diskTimeWriteLast": 0.699324445683
+#                },
+
+    if 'diskUsageArray' in jobj['event']['measurementsForVfScalingFields']:
+      print('Found diskUsageArray')
+      for disk in jobj['event']['measurementsForVfScalingFields']['diskUsageArray']:
+        id=disk['diskIdentifier']
+        pdata = 'diskUsage,system={},disk={}'.format(source,id)
+        d = disk.items()
+        for key,val in d:
+          if key != 'diskIdentifier':
+            pdata = pdata + ',{}={}'.format(key,val)
+        i=pdata.find(',', pdata.find('disk='))
+        pdata = pdata[:i] + ' ' + pdata[i+1:]
+        send_to_influxdb("diskUsage", pdata)
+
 #            "memoryUsageArray": [
 #                {
 #                    "memoryBuffered": 269056.0,

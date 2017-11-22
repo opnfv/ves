@@ -242,6 +242,7 @@ LoadPlugin csv
  StoreRates false
 </Plugin>
 
+# TODO: complete the virt plugin install before enabling
 #LoadPlugin virt
 #<Plugin virt>
 #  Connection "qemu:///system"
@@ -275,7 +276,8 @@ LoadPlugin interface
 LoadPlugin memory
 LoadPlugin load
 LoadPlugin disk
-LoadPlugin uuid
+# TODO: how to set this option only to apply to VMs (not nodes)
+#LoadPlugin uuid
 
 LoadPlugin write_kafka
 <Plugin write_kafka>
@@ -336,6 +338,8 @@ LoadPlugin match_regex
 </Chain>
 EOF
   fi
+
+#  sudo sed -i -- "s/#Hostname    \"localhost\"/Hostname    \"$HOSTNAME\"/" /opt/collectd/etc/collectd.conf
 
   if [[ $(grep -c $ves_hostname /etc/hosts) -eq 0 ]]; then
     log "add to /etc/hosts: $ves_kafka_host $ves_hostname"

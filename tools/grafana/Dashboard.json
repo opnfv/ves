@@ -11,7 +11,7 @@
   "rows": [
     {
       "collapse": false,
-      "height": 273,
+      "height": 401,
       "panels": [
         {
           "aliasColors": {},
@@ -31,13 +31,15 @@
           "id": 3,
           "interval": "30s",
           "legend": {
-            "alignAsTable": false,
+            "alignAsTable": true,
             "avg": true,
             "current": true,
             "max": true,
             "min": true,
             "rightSide": false,
             "show": true,
+            "sort": "current",
+            "sortDesc": true,
             "total": false,
             "values": true
           },
@@ -79,6 +81,12 @@
                       "load-shortterm"
                     ],
                     "type": "field"
+                  },
+                  {
+                    "params": [
+                      "5"
+                    ],
+                    "type": "moving_average"
                   }
                 ]
               ],
@@ -140,15 +148,443 @@
           "dashes": false,
           "datasource": "VESEvents",
           "fill": 1,
+          "grid": {
+            "leftLogBase": 1,
+            "leftMax": null,
+            "leftMin": null,
+            "rightLogBase": 1,
+            "rightMax": null,
+            "rightMin": null
+          },
+          "id": 6,
+          "interval": "30s",
+          "legend": {
+            "alignAsTable": true,
+            "avg": true,
+            "current": true,
+            "max": true,
+            "min": true,
+            "rightSide": false,
+            "show": true,
+            "sort": "current",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "span": 6,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "alias": "",
+              "dsType": "influxdb",
+              "groupBy": [
+                {
+                  "params": [
+                    "system"
+                  ],
+                  "type": "tag"
+                },
+                {
+                  "params": [
+                    "cpu"
+                  ],
+                  "type": "tag"
+                }
+              ],
+              "measurement": "cpuUsage",
+              "orderByTime": "ASC",
+              "policy": "default",
+              "query": "SELECT mean(\"cpusystem\") FROM \"cpu\" WHERE $timeFilter GROUP BY time(1m) fill(null)",
+              "refId": "B",
+              "resultFormat": "time_series",
+              "select": [
+                [
+                  {
+                    "params": [
+                      "cpuUsageUser"
+                    ],
+                    "type": "field"
+                  },
+                  {
+                    "params": [
+                      "5"
+                    ],
+                    "type": "moving_average"
+                  }
+                ]
+              ],
+              "tags": [
+                {
+                  "key": "system",
+                  "operator": "=~",
+                  "value": "/^$host$/"
+                }
+              ]
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "host CPU Usage User",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "x-axis": true,
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "y-axis": true,
+          "y_formats": [
+            "short",
+            "short"
+          ],
+          "yaxes": [
+            {
+              "format": "short",
+              "label": "Percent",
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ]
+        }
+      ],
+      "repeat": null,
+      "repeatIteration": null,
+      "repeatRowId": null,
+      "showTitle": false,
+      "title": "Dashboard Row",
+      "titleSize": "h6"
+    },
+    {
+      "collapse": false,
+      "height": 442,
+      "panels": [
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "VESEvents",
+          "fill": 1,
+          "grid": {
+            "leftLogBase": 1,
+            "leftMax": null,
+            "leftMin": null,
+            "rightLogBase": 1,
+            "rightMax": null,
+            "rightMin": null
+          },
+          "id": 2,
+          "interval": "30s",
+          "legend": {
+            "alignAsTable": true,
+            "avg": true,
+            "current": true,
+            "max": true,
+            "min": true,
+            "rightSide": false,
+            "show": true,
+            "sort": "current",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 2,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "span": 6,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "alias": "",
+              "dsType": "influxdb",
+              "groupBy": [
+                {
+                  "params": [
+                    "system"
+                  ],
+                  "type": "tag"
+                },
+                {
+                  "params": [
+                    "vnic"
+                  ],
+                  "type": "tag"
+                }
+              ],
+              "measurement": "vNicPerformance",
+              "orderByTime": "ASC",
+              "policy": "default",
+              "query": "SELECT derivative(mean(\"rxoctetsacc\"), 10s) FROM \"vnic\" WHERE \"system\" = 'computehost' AND $timeFilter GROUP BY time(1m) fill(null)",
+              "refId": "A",
+              "resultFormat": "time_series",
+              "select": [
+                [
+                  {
+                    "params": [
+                      "receivedTotalPacketsAccumulated"
+                    ],
+                    "type": "field"
+                  },
+                  {
+                    "params": [
+                      "5"
+                    ],
+                    "type": "moving_average"
+                  }
+                ]
+              ],
+              "tags": [
+                {
+                  "key": "system",
+                  "operator": "=~",
+                  "value": "/^$host$/"
+                }
+              ]
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Received Octets",
+          "tooltip": {
+            "shared": true,
+            "sort": 2,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "x-axis": true,
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "y-axis": true,
+          "y_formats": [
+            "short",
+            "short"
+          ],
+          "yaxes": [
+            {
+              "format": "short",
+              "label": "Octets/Packets",
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ]
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "VESEvents",
+          "fill": 1,
+          "grid": {
+            "leftLogBase": 1,
+            "leftMax": null,
+            "leftMin": null,
+            "rightLogBase": 1,
+            "rightMax": null,
+            "rightMin": null
+          },
+          "id": 4,
+          "interval": "30s",
+          "legend": {
+            "alignAsTable": true,
+            "avg": true,
+            "current": true,
+            "max": true,
+            "min": true,
+            "rightSide": false,
+            "show": true,
+            "sort": "current",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 2,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "span": 6,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "alias": "",
+              "dsType": "influxdb",
+              "groupBy": [
+                {
+                  "params": [
+                    "system"
+                  ],
+                  "type": "tag"
+                },
+                {
+                  "params": [
+                    "vnic"
+                  ],
+                  "type": "tag"
+                }
+              ],
+              "measurement": "vNicPerformance",
+              "orderByTime": "ASC",
+              "policy": "default",
+              "refId": "B",
+              "resultFormat": "time_series",
+              "select": [
+                [
+                  {
+                    "params": [
+                      "receivedOctetsAccumulated"
+                    ],
+                    "type": "field"
+                  },
+                  {
+                    "params": [
+                      "5"
+                    ],
+                    "type": "moving_average"
+                  }
+                ]
+              ],
+              "tags": [
+                {
+                  "key": "system",
+                  "operator": "=~",
+                  "value": "/^$host$/"
+                }
+              ]
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Transmitted Octets",
+          "tooltip": {
+            "shared": true,
+            "sort": 2,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "x-axis": true,
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "y-axis": true,
+          "y_formats": [
+            "short",
+            "short"
+          ],
+          "yaxes": [
+            {
+              "format": "short",
+              "label": "Octets/Packets",
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ]
+        }
+      ],
+      "repeat": null,
+      "repeatIteration": null,
+      "repeatRowId": null,
+      "showTitle": false,
+      "title": "Dashboard Row",
+      "titleSize": "h6"
+    },
+    {
+      "collapse": false,
+      "height": 362,
+      "panels": [
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "VESEvents",
+          "fill": 1,
           "id": 5,
           "legend": {
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
+            "alignAsTable": true,
+            "avg": true,
+            "current": true,
+            "max": true,
+            "min": true,
             "show": true,
+            "sort": "current",
+            "sortDesc": false,
             "total": false,
-            "values": false
+            "values": true
           },
           "lines": true,
           "linewidth": 1,
@@ -234,144 +670,6 @@
               "show": true
             }
           ]
-        }
-      ],
-      "repeat": null,
-      "repeatIteration": null,
-      "repeatRowId": null,
-      "showTitle": false,
-      "title": "Dashboard Row",
-      "titleSize": "h6"
-    },
-    {
-      "collapse": false,
-      "height": 433,
-      "panels": [
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "VESEvents",
-          "fill": 1,
-          "grid": {
-            "leftLogBase": 1,
-            "leftMax": null,
-            "leftMin": null,
-            "rightLogBase": 1,
-            "rightMax": null,
-            "rightMin": null
-          },
-          "id": 2,
-          "interval": "30s",
-          "legend": {
-            "alignAsTable": true,
-            "avg": true,
-            "current": false,
-            "max": false,
-            "min": false,
-            "rightSide": false,
-            "show": true,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 2,
-          "links": [],
-          "nullPointMode": "null",
-          "percentage": false,
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "span": 6,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "alias": "",
-              "dsType": "influxdb",
-              "groupBy": [
-                {
-                  "params": [
-                    "system"
-                  ],
-                  "type": "tag"
-                },
-                {
-                  "params": [
-                    "vnic"
-                  ],
-                  "type": "tag"
-                }
-              ],
-              "measurement": "vNicPerformance",
-              "orderByTime": "ASC",
-              "policy": "default",
-              "query": "SELECT derivative(mean(\"rxoctetsacc\"), 10s) FROM \"vnic\" WHERE \"system\" = 'computehost' AND $timeFilter GROUP BY time(1m) fill(null)",
-              "refId": "A",
-              "resultFormat": "time_series",
-              "select": [
-                [
-                  {
-                    "params": [
-                      "receivedTotalPacketsAccumulated"
-                    ],
-                    "type": "field"
-                  }
-                ]
-              ],
-              "tags": [
-                {
-                  "key": "system",
-                  "operator": "=~",
-                  "value": "/^$host$/"
-                }
-              ]
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeShift": null,
-          "title": "Received Octets",
-          "tooltip": {
-            "shared": true,
-            "sort": 2,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "x-axis": true,
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "y-axis": true,
-          "y_formats": [
-            "short",
-            "short"
-          ],
-          "yaxes": [
-            {
-              "format": "short",
-              "label": "Octets/Packets",
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ]
         },
         {
           "aliasColors": {},
@@ -380,29 +678,21 @@
           "dashes": false,
           "datasource": "VESEvents",
           "fill": 1,
-          "grid": {
-            "leftLogBase": 1,
-            "leftMax": null,
-            "leftMin": null,
-            "rightLogBase": 1,
-            "rightMax": null,
-            "rightMin": null
-          },
-          "id": 4,
-          "interval": "30s",
+          "id": 7,
           "legend": {
             "alignAsTable": true,
             "avg": true,
-            "current": false,
-            "max": false,
-            "min": false,
-            "rightSide": false,
+            "current": true,
+            "max": true,
+            "min": true,
             "show": true,
+            "sort": "current",
+            "sortDesc": true,
             "total": false,
             "values": true
           },
           "lines": true,
-          "linewidth": 2,
+          "linewidth": 1,
           "links": [],
           "nullPointMode": "null",
           "percentage": false,
@@ -427,23 +717,29 @@
                 },
                 {
                   "params": [
-                    "vnic"
+                    "disk"
                   ],
                   "type": "tag"
                 }
               ],
-              "measurement": "vNicPerformance",
+              "measurement": "diskUsage",
               "orderByTime": "ASC",
-              "policy": "default",
-              "refId": "B",
+              "policy": "autogen",
+              "refId": "A",
               "resultFormat": "time_series",
               "select": [
                 [
                   {
                     "params": [
-                      "receivedOctetsAccumulated"
+                      "diskOpsWriteLast"
                     ],
                     "type": "field"
+                  },
+                  {
+                    "params": [
+                      "5"
+                    ],
+                    "type": "moving_average"
                   }
                 ]
               ],
@@ -452,6 +748,12 @@
                   "key": "system",
                   "operator": "=~",
                   "value": "/^$host$/"
+                },
+                {
+                  "condition": "AND",
+                  "key": "disk",
+                  "operator": "=",
+                  "value": "sda"
                 }
               ]
             }
@@ -459,14 +761,13 @@
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "Transmitted Octets",
+          "title": "Disk Usage",
           "tooltip": {
             "shared": true,
-            "sort": 2,
+            "sort": 0,
             "value_type": "individual"
           },
           "type": "graph",
-          "x-axis": true,
           "xaxis": {
             "buckets": null,
             "mode": "time",
@@ -474,16 +775,11 @@
             "show": true,
             "values": []
           },
-          "y-axis": true,
-          "y_formats": [
-            "short",
-            "short"
-          ],
           "yaxes": [
             {
               "format": "short",
-              "label": "Octets/Packets",
-              "logBase": 1,
+              "label": null,
+              "logBase": 10,
               "max": null,
               "min": null,
               "show": true
@@ -514,48 +810,16 @@
     "list": [
       {
         "allValue": null,
-        "current": {
-          "tags": [],
-          "text": "All",
-          "value": [
-            "$__all"
-          ]
-        },
+        "current": {},
         "datasource": "VESEvents",
         "hide": 0,
         "includeAll": true,
         "label": "host",
         "multi": true,
         "name": "host",
-        "options": [
-          {
-            "selected": true,
-            "text": "All",
-            "value": "$__all"
-          },
-          {
-            "selected": false,
-            "text": "4C4C4544-004C-4E10-8054-B6C04F475831",
-            "value": "4C4C4544-004C-4E10-8054-B6C04F475831"
-          },
-          {
-            "selected": false,
-            "text": "4C4C4544-004C-4E10-8057-B6C04F475831",
-            "value": "4C4C4544-004C-4E10-8057-B6C04F475831"
-          },
-          {
-            "selected": false,
-            "text": "4C4C4544-004C-5010-8053-B6C04F475831",
-            "value": "4C4C4544-004C-5010-8053-B6C04F475831"
-          },
-          {
-            "selected": false,
-            "text": "4C4C4544-004E-3110-8051-C3C04F445631",
-            "value": "4C4C4544-004E-3110-8051-C3C04F445631"
-          }
-        ],
+        "options": [],
         "query": "SHOW TAG VALUES WITH KEY=system",
-        "refresh": 0,
+        "refresh": 1,
         "regex": "",
         "sort": 0,
         "tagValuesQuery": "",
@@ -592,6 +856,6 @@
   },
   "timezone": "browser",
   "title": "VES Demo",
-  "version": 2
+  "version": 3
 }
 }
