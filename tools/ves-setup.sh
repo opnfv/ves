@@ -18,6 +18,9 @@
 #. - a dedicated or shared Kafka server for collection of events from collectd
 #. - VES collectd agents running in host or guest mode
 #. - VES monitor (test collector)
+#. - Influxdb service (if an existing service is not passed as an option)
+#. - Grafana service (if an existing service is not passed as an option)
+#. - VES monitor (test collector)
 #.  A typical multi-node install could involve these steps:
 #.  - Install the VES collector (for testing) on one of the hosts, or use a
 #.    pre-installed VES collector e.g. from the ONAP project.
@@ -46,6 +49,10 @@
 #.   ves_version: VES API version (default: 5.1)
 #.   ves_kafka_port: kafka port (default: 9092)
 #.   ves_kafka_host: kafka host IP or hostname (default: 127.0.0.1)
+#.   ves_influxdb_host: influxdb host:port (default: none)
+#.   ves_influxdb_auth: credentials in form "user/pass" (default: none)
+#.   ves_grafana_host: grafana host:port (default: none)
+#.   ves_grafana_auth: credentials in form "user/pass" (default: admin/admin)
 #.
 #. Usage:
 #.   git clone https://gerrit.opnfv.org/gerrit/ves /tmp/ves
@@ -105,6 +112,10 @@ ves_interval="${ves_interval:=20}"
 ves_version="${ves_version:=5.1}"
 ves_kafka_host="${ves_kafka_host:=127.0.0.1}"
 ves_kafka_port="${ves_kafka_port:=9092}"
+ves_influxdb_host="${ves_influxdb_host:=}"
+ves_influxdb_auth="${ves_influxdb_auth:=}"
+ves_grafana_host="${ves_grafana_host:=}"
+ves_grafana_auth="${ves_grafana_auth:=admin/admin}"
 export ves_mode
 export ves_host
 export ves_hostname
@@ -117,9 +128,14 @@ export ves_pass
 export ves_interval
 export ves_kafka_hostame
 export ves_kafka_port
+export ves_influxdb_host
+export ves_influxdb_auth
+export ves_grafana_host
+export ves_grafana_auth
 EOF
   fi
   source /tmp/ves/ves_env.sh
+  echo /tmp/ves/ves_env.sh
 }
 
 function setup_kafka() {
@@ -403,6 +419,8 @@ EOF
 
 function setup_collector() {
   log "setup collector"
+  $2 $3 $4
+
   log "install prerequistes"
   sudo apt-get install -y  jq
 
@@ -412,43 +430,64 @@ function setup_collector() {
   export ves_host
   setup_env
 
-  log "setup influxdb container"
-  sudo docker run -d --name=ves-influxdb -p 8086:8086 influxdb
-  status=$(sudo docker inspect ves-influxdb | jq -r '.[0].State.Status')
-  while [[ "x$status" != "xrunning" ]]; do
-    log "InfluxDB container state is ($status)"
-    sleep 10
-    status=$(sudo docker inspect ves-influxdb | jq -r '.[0].State.Status')
-  done
-  log "InfluxDB container state is $status"
+  echo "ves_influxdb_host=$ves_influxdb_host"
+  echo "ves_grafana_host=$ves_grafana_host"
 
-  log "wait for InfluxDB API to be active"
-  while ! curl http://$ves_host:8086/ping ; do
-    log "InfluxDB API is not yet responding... waiting 10 seconds"
-    sleep 10
-  done
+  if [[ "$ves_influxdb_host" == "" ]]; then
+    # TODO: migrate to deployment via Helm
+    log "setup influxdb container"
+    ves_influxdb_host="$ves_host:8086"
+    export ves_influxdb_host
+    sed -i -- "s/ves_influxdb_host=/ves_influxdb_host=$ves_influxdb_host/" \
+      /tmp/ves/ves_env.sh
+    sudo docker run -d --name=ves-influxdb -p 8086:8086 influxdb
+    status=$(sudo docker inspect ves-influxdb | jq -r '.[0].State.Status')
+    while [[ "x$status" != "xrunning" ]]; do
+      log "InfluxDB container state is ($status)"
+      sleep 10
+      status=$(sudo docker inspect ves-influxdb | jq -r '.[0].State.Status')
+    done
+    log "InfluxDB container state is $status"
+
+    log "wait for InfluxDB API to be active"
+    while ! curl http://$ves_influxdb_host/ping ; do
+      log "InfluxDB API is not yet responding... waiting 10 seconds"
+      sleep 10
+    done
+  fi
 
   log "setup InfluxDB database"
-  curl -X POST http://$ves_host:8086/query \
+  # TODO: check if pre-existing and skip
+  curl -X POST http://$ves_influxdb_host/query \
     --data-urlencode "q=CREATE DATABASE veseventsdb"
 
-  log "install Grafana container"
-  sudo docker run -d --name ves-grafana -p 3001:3000 grafana/grafana
-  status=$(sudo docker inspect ves-grafana | jq -r '.[0].State.Status')
-  while [[ "x$status" != "xrunning" ]]; do
-    log "Grafana container state is ($status)"
-    sleep 10
+  if [[ "$ves_grafana_host" == "" ]]; then
+    # TODO: migrate to deployment via Helm
+    log "install Grafana container"
+    ves_grafana_host="$ves_host:3000"
+    ves_grafana_auth="admin:admin"
+    export ves_grafana_host
+    export ves_grafana_auth
+    sed -i -- "s/ves_grafana_host=/ves_grafana_host=$ves_grafana_host/" \
+      /tmp/ves/ves_env.sh
+    sudo docker run -d --name ves-grafana -p 3000:3000 grafana/grafana
     status=$(sudo docker inspect ves-grafana | jq -r '.[0].State.Status')
-  done
-  log "Grafana container state is $status"
+    while [[ "x$status" != "xrunning" ]]; do
+      log "Grafana container state is ($status)"
+      sleep 10
+      status=$(sudo docker inspect ves-grafana | jq -r '.[0].State.Status')
+    done
+    log "Grafana container state is $status"
 
-  log "wait for Grafana API to be active"
-  while ! curl http://$ves_host:3001 ; do
-    log "Grafana API is not yet responding... waiting 10 seconds"
-    sleep 10
-  done
+    log "wait for Grafana API to be active"
+    while ! curl http://$ves_grafana_host ; do
+      log "Grafana API is not yet responding... waiting 10 seconds"
+      sleep 10
+    done
+  fi
 
-  log "add VESEvents datasource to Grafana"
+  log "add VESEvents datasource to Grafana at http://$ves_grafana_auth@$ves_grafana_host"
+  # TODO: check if pre-existing and skip
   cat <<EOF >/tmp/ves/datasource.json
 { "name":"VESEvents",
   "type":"influxdb",
@@ -468,15 +507,16 @@ EOF
 
   curl -H "Accept: application/json" -H "Content-type: application/json" \
     -X POST -d @/tmp/ves/datasource.json \
-    http://admin:admin@$ves_host:3001/api/datasources
+    http://$ves_grafana_auth@$ves_grafana_host/api/datasources
 
-  log "add VES dashboard to Grafana"
+  log "add VES dashboard to Grafana at http://$ves_grafana_auth@$ves_grafana_host"
   curl -H "Accept: application/json" -H "Content-type: application/json" \
     -X POST \
     -d @/tmp/ves/tools/grafana/Dashboard.json\
-    http://admin:admin@$ves_host:3001/api/dashboards/db	
+    http://$ves_grafana_auth@$ves_grafana_host/api/dashboards/db	
 
   log "setup collector container"
+  # TODO: migrate to deployment via Helm
   cd /tmp/ves
   touch monitor.log
   rm -rf /tmp/ves/evel-test-collector

@@ -55,6 +55,14 @@ if [[ "$1" == "master" ]]; then
   export ves_pass
   ves_kafka_host="$node"
   export ves_kafka_host
+  ves_influxdb_host=$ves_influxdb_host
+  export ves_influxdb_host
+  ves_influxdb_auth=$ves_influxdb_auth
+  export ves_influxdb_auth
+  ves_grafana_host=$ves_grafana_host
+  export ves_grafana_host
+  ves_grafana_auth=$ves_grafana_auth
+  export ves_grafana_auth
   bash /tmp/ves/tools/ves-setup.sh collector
   bash /tmp/ves/tools/ves-setup.sh kafka
   bash /tmp/ves/tools/ves-setup.sh collectd
