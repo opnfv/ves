@@ -367,54 +367,24 @@ EOF
 
 function setup_agent() {
   log "setup VES agent"
-  if [[ ! -f /.dockerenv ]]; then
-    log "start the ves-agent container"
-    sudo docker run -it -d -v /tmp/ves:/opt/ves --name=ves-agent \
-    ubuntu:xenial /bin/bash 
-    log "execute the agent setup script in the container"
-    sudo docker exec ves-agent /bin/bash /opt/ves/ves-setup.sh agent
-  else
-    common_prereqs
-    log "setup the VES environment"
-    source /opt/ves/ves_env.sh
-    log "install agent prerequisites"
-    pip install pyaml
-
-    setup_kafka_client
-
-    log "clone OPNFV Barometer"
-    rm -rf /opt/ves/barometer
-    git clone https://gerrit.opnfv.org/gerrit/barometer /opt/ves/barometer
-    # Test patch
-    cd /opt/ves/barometer
-    git fetch https://gerrit.opnfv.org/gerrit/barometer refs/changes/27/47427/1 && git checkout FETCH_HEAD
-
-    log "setup ves_app_config.conf"
-    source /opt/ves/ves_env.sh
-    cd /opt/ves/barometer/3rd_party/collectd-ves-app/ves_app
-    cat <<EOF >ves_app_config.conf
-[config]
-Domain = $ves_host
-Port = $ves_port
-Path = $ves_path
-Topic = $ves_topic
-UseHttps = $ves_https
-Username = $ves_user
-Password = $ves_pass
-SendEventInterval = $ves_interval
-ApiVersion = $ves_version
-KafkaPort = $ves_kafka_port
-KafkaBroker = $ves_kafka_host
-EOF
-
-#    log "add guest.yaml measurements to host.yaml (enables actual host data)"
-#    tail --lines=+24 guest.yaml >>host.yaml
-
-    log "start VES agent"
-    echo "$ves_kafka_host $ves_hostname">>/etc/hosts
-    nohup python ves_app.py --events-schema=$ves_mode.yaml --loglevel ERROR \
-      --config=ves_app_config.conf > /opt/ves/ves_app.stdout.log 2>&1 &
-  fi
+  source /tmp/ves/ves_env.sh
+  cd /tmp/ves/tools
+  sudo docker build -t ves-agent ves-agent
+  sudo docker run -it -d \
+    -e ves_mode=$ves_mode \
+    -e ves_host=$ves_host  \
+    -e ves_port=$ves_port \
+    -e ves_path=$ves_path \
+    -e ves_topic=$ves_topic \
+    -e ves_https=$ves_https \
+    -e ves_user=$ves_user \
+    -e ves_pass=$ves_pass \
+    -e ves_interval=$ves_interval \
+    -e ves_version=$ves_version \
+    -e ves_kafka_port=$ves_kafka_port \
+    -e ves_kafka_host=$ves_kafka_host \
+    -e ves_hostname=$ves_hostname \
+    --name ves-agent ves-agent
 }
 
 function setup_collector() {
