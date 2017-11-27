@@ -232,7 +232,7 @@ def listener(environ, start_response, schema):
 # Send event to influxdb
 #--------------------------------------------------------------------------
 def send_to_influxdb(event,pdata):
-  url = 'http://{}:8086/write?db=veseventsdb'.format(influxdb)
+  url = 'http://{}/write?db=veseventsdb'.format(influxdb)
   print('Send {} to influxdb at {}: {}'.format(event,influxdb,pdata))
   r = requests.post(url, data=pdata, headers={'Content-Type': 'text/plain'})
   print('influxdb return code {}'.format(r.status_code))
