@@ -15,7 +15,10 @@
 #
 #. What this is: Startup script for the OPNFV VES Agent running under docker.
 
-echo "$ves_kafka_host $ves_hostname" >>/etc/hosts
+echo "$ves_kafka_host $ves_kafka_hostname" >>/etc/hosts
+echo "ves_kafka_hostname=$ves_kafka_hostname"
+echo "*** /etc/hosts ***"
+cat /etc/hosts
 
 cd /opt/ves/barometer/3rd_party/collectd-ves-app/ves_app
 cat <<EOF >ves_app_config.conf
@@ -39,5 +42,3 @@ python ves_app.py --events-schema=$ves_mode.yaml --loglevel DEBUG \
   --config=ves_app_config.conf
 echo "*** ves_app.log ***"
 cat ves_app.log
-echo "*** /opt/ves/kafka_2.11-0.11.0.2/kafka.log ***"
-cat /opt/ves/kafka_2.11-0.11.0.2/kafka.log

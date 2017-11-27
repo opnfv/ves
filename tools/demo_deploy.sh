@@ -13,48 +13,73 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#. What this is: Complete scripted deployment of the VES monitoring framework
-#  When complete, the following will be installed:
-#.  - On the specified master node, a Kafka server and containers running the 
-#     OPNFV Barometer VES agent, OPNFV VES collector, InfluxDB, and Grafana 
+#. What this is: Complete scripted deployment of the VES monitoring framework.
+#. Intended to be invoked from a server used to manage the nodes where the VES
+#. framework is to be installed, referred to here as the "admin server". When
+#. complete, the following will be installed:
+#.  - On the specified master node, a Kafka server and containers running the
+#.    VES "core components" (OPNFV Barometer VES agent, OPNFV VES collector,
+#.    and optionally InfluxDB and Grafana if pre-existing instances of those
+#.    components are not accessible at the default or provided hosts as
+#.    described below).
+#.    "master" as used here refers to the node where these common VES framework
+#.    elements are deployed. It may typically be a master/control plane node
+#.    for a set of nodes, but can also be any other node.
 #.  - On each specified worker node, collectd configured per OPNFV Barometer
 #.
 #. Prerequisites:
-#. - Ubuntu server for kubernetes cluster nodes (master and worker nodes)
-#. - MAAS server as cluster admin for kubernetes master/worker nodes
+#. - Ubuntu Xenial host for the admin server
+#. - Ubuntu Xenial server for master and worker nodes
 #. - Password-less ssh key provided for node setup
-#. - hostname of kubernetes master setup in DNS or /etc/hosts
-#. Usage: on the MAAS server
+#. - hostname of selected master node in DNS or /etc/hosts
+#. - env variables set prior to running this script, as per ves-setup.sh
+#.     ves_kafka_hostname: hostname of the node where the kafka server runs
+#. - optional env varibles set prior to running this script, as per ves-setup.sh
+#.     ves_influxdb_host: ip:port of the influxdb service
+#.     ves_influxdb_auth: authentication for the influxdb service
+#.     ves_grafana_host: ip:port of the grafana service
+#.     ves_grafana_auth: authentication for the grafana service
+#.
+#. For deployment in a kubernetes cluster as setup by OPNFV Models scripts:
+#. - k8s cluster setup as in OPNFV Models repo tools/kubernetes/demo_deploy.sh
+#.   which also allows use of Cloudify to deploy VES core services as
+#.   k8s services.
+#.
+#. Usage: on the admin server
 #. $ git clone https://gerrit.opnfv.org/gerrit/ves ~/ves
-#. $ bash ~/ves/tools/demo_deploy.sh master <node> <key> 
-#.   master: setup VES on k8s master
-#.   <node>: IP of cluster master node
+#. $ bash ~/ves/tools/demo_deploy.sh <key> <master> <workers> [cloudify]
 #.   <key>: SSH key enabling password-less SSH to nodes
-#. $ bash ~/ves/tools/demo_deploy.sh worker <node> <key> 
-#.   worker: setup VES on k8s worker
-#.   <node>: IP of worker node
-#.   <key>: SSH key enabling password-less SSH to nodes
+#.   <master>: master node where core components will be installed
+#.   <workers>: list of worker nodes where collectd will be installed
+#.   cloudify: flag indicating to deploy VES core services via Cloudify
 
-node=$2
-key=$3
+key=$1
+master=$2
+workers="$3"
+cloudify=$4
 
 eval `ssh-agent`
 ssh-add $key
-if [[ "$1" == "master" ]]; then
-  echo; echo "$0 $(date): Setting up master node"
-  scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-    ~/ves ubuntu@$node:/tmp
-  ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$node <<EOF
-  ves_host="$master"
+
+echo; echo "$0 $(date): Setting up master node"
+ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+  ubuntu@$master sudo rm -rf /tmp/ves
+scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+  ~/ves ubuntu@$master:/tmp
+ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+  ubuntu@$master <<EOF
+  ves_host=$master
   export ves_host
-  ves_mode="node"
+  ves_mode=node
   export ves_mode
-  ves_user="hello"
+  ves_user=hello
   export ves_user
-  ves_pass="world"
+  ves_pass=world
   export ves_pass
-  ves_kafka_host="$node"
+  ves_kafka_host=$master
   export ves_kafka_host
+  ves_kafka_hostname=$ves_kafka_hostname
+  export ves_kafka_hostname
   ves_influxdb_host=$ves_influxdb_host
   export ves_influxdb_host
   ves_influxdb_auth=$ves_influxdb_auth
@@ -63,21 +88,22 @@ if [[ "$1" == "master" ]]; then
   export ves_grafana_host
   ves_grafana_auth=$ves_grafana_auth
   export ves_grafana_auth
+  env | grep ves
   bash /tmp/ves/tools/ves-setup.sh collector
   bash /tmp/ves/tools/ves-setup.sh kafka
+  bash /tmp/ves/tools/ves-setup.sh agent $cloudify
   bash /tmp/ves/tools/ves-setup.sh collectd
-  bash /tmp/ves/tools/ves-setup.sh agent
 EOF
-  mkdir /tmp/ves
-  scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-    ubuntu@$node:/tmp/ves/ves_env.sh /tmp/ves/.
-  echo "VES Grafana dashboards are available at http://$node:3001 (login as admin/admin)"
-else
+
+scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+  ubuntu@$master:/tmp/ves/ves_env.sh ~/ves/.
+
+echo; echo "$0 $(date): VES Grafana dashboards are available at http://$master:3001 (login as admin/admin)"
+
+for node in $workers; do
   echo; echo "$0 $(date): Setting up collectd at $node"
   scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
     ~/ves ubuntu@$node:/tmp
-  scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-    /tmp/ves/ves_env.sh ubuntu@$node:/tmp/ves/.
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
     ubuntu@$node bash /tmp/ves/tools/ves-setup.sh collectd
-fi
+done

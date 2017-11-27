@@ -27,11 +27,7 @@
 #.  - Install Kafka server on one of the hosts, or use a pre-installed server
 #.    accessible from the agent hosts.
 #.  - Install collectd on each host.
-#.  - Install the VES agent on each host.
-#.  - As needed, install the VES agent on each virtual host. This could include
-#.    pre-installed VES agents in VM or container images, which are configured
-#.    upon virtual host deployment, or agent install/config as part of virtual
-#.    host deploy. NOTE: support for pre-installed VES agents is a WIP.
+#.  - Install the VES agent on one of the hosts.
 #.
 #. Prerequisites:
 #. - Ubuntu Xenial (Centos support to be provided)
@@ -47,8 +43,9 @@
 #.   ves_pass: password for basic auth with collector (default: empty)
 #.   ves_interval: frequency in sec for collectd data reports (default: 20)
 #.   ves_version: VES API version (default: 5.1)
+#.   ves_kafka_host: kafka host IP (default: 127.0.0.1)
+#.   ves_kafka_hostname: kafka host hostname (default: localhost)
 #.   ves_kafka_port: kafka port (default: 9092)
-#.   ves_kafka_host: kafka host IP or hostname (default: 127.0.0.1)
 #.   ves_influxdb_host: influxdb host:port (default: none)
 #.   ves_influxdb_auth: credentials in form "user/pass" (default: none)
 #.   ves_grafana_host: grafana host:port (default: none)
@@ -56,11 +53,17 @@
 #.
 #. Usage:
 #.   git clone https://gerrit.opnfv.org/gerrit/ves /tmp/ves
-#.   bash /tmp/ves/ves-setup.sh <collector|kafka|collectd|agent>
+#.   bash /tmp/ves/ves-setup.sh <collector|kafka|collectd|agent> [cloudify]
 #.     collector: setup VES collector (test collector) 
 #.     kafka: setup kafka server for VES events from collect agent(s)
 #.     collectd: setup collectd with libvirt plugin, as a kafka publisher
 #.     agent: setup VES agent in host or guest mode, as a kafka consumer
+#.     cloudify: (optional) use cloudify to deploy the component, as setup by
+#.       tools/cloudify/k8s-cloudify.sh in the OPNFV Models repo.
+#.   bash /tmp/ves/ves-setup.sh <master> <workers>
+#.     master: VES master node IP
+#.     workers: quoted, space-separated list of worker node IPs
+#.
 #.   See demo_deploy.sh in this repo for a recommended sequence of the above.
 #.
 #. Status: this is a work in progress, under test.
@@ -96,12 +99,10 @@ function common_prereqs() {
 function setup_env() {
   if [[ ! -d /tmp/ves ]]; then mkdir /tmp/ves; fi
   cp $0 /tmp/ves
-  if [[ ! -f /tmp/ves/ves_env.sh ]]; then
-    cat <<EOF >/tmp/ves/ves_env.sh
+  cat <<EOF >/tmp/ves/ves_env.sh
 #!/bin/bash
 ves_mode="${ves_mode:=node}"
 ves_host="${ves_host:=127.0.0.1}"
-ves_hostname="${ves_hostname:=localhost}"
 ves_port="${ves_port:=30000}"
 ves_path="${ves_path:=}"
 ves_topic="${ves_topic:=}"
@@ -111,14 +112,14 @@ ves_pass="${ves_pass:=}"
 ves_interval="${ves_interval:=20}"
 ves_version="${ves_version:=5.1}"
 ves_kafka_host="${ves_kafka_host:=127.0.0.1}"
+ves_kafka_hostname="${ves_kafka_hostname:=localhost}"
 ves_kafka_port="${ves_kafka_port:=9092}"
-ves_influxdb_host="${ves_influxdb_host:=}"
+ves_influxdb_host="${ves_influxdb_host:=localhost:8086}"
 ves_influxdb_auth="${ves_influxdb_auth:=}"
-ves_grafana_host="${ves_grafana_host:=}"
-ves_grafana_auth="${ves_grafana_auth:=admin/admin}"
+ves_grafana_host="${ves_grafana_host:=localhost:3000}"
+ves_grafana_auth="${ves_grafana_auth:=admin:admin}"
 export ves_mode
 export ves_host
-export ves_hostname
 export ves_port
 export ves_path
 export ves_topic
@@ -126,14 +127,15 @@ export ves_https
 export ves_user
 export ves_pass
 export ves_interval
-export ves_kafka_hostame
+export ves_kafka_host
+export ves_kafka_hostname
 export ves_kafka_port
 export ves_influxdb_host
 export ves_influxdb_auth
 export ves_grafana_host
 export ves_grafana_auth
 EOF
-  fi
+
   source /tmp/ves/ves_env.sh
   echo /tmp/ves/ves_env.sh
 }
@@ -159,35 +161,35 @@ function setup_kafka() {
     > kafka_2.11-$ver/kafka.log 2>&1 &
 }
 
-function setup_kafka_client() {
-  log "Install Apache Kafka C/C++ client library"
-  if [[ ! -f /.dockerenv ]]; then dosudo="sudo"; fi
-  $dosudo apt-get install -y build-essential
-  git clone https://github.com/edenhill/librdkafka.git ~/librdkafka
-  cd ~/librdkafka
-  git checkout -b v0.9.5 v0.9.5
-  # TODO: Barometer VES guide to clarify specific prerequisites for Ubuntu
-  $dosudo apt-get install -y libpthread-stubs0-dev
-  $dosudo apt-get install -y libssl-dev
-  $dosudo apt-get install -y libsasl2-dev
-  $dosudo apt-get install -y liblz4-dev
-  ./configure --prefix=/usr
-  make
-  $dosudo make install
-}
-
 function setup_collectd() {
   log "setup collectd"
   common_prereqs
-  setup_env
+  source /tmp/ves/ves_env.sh
 
   log "cleanup any previous failed install"
   sudo rm -rf ~/collectd-virt
   sudo rm -rf ~/librdkafka
   sudo rm -rf ~/collectd
 
-  setup_kafka_client
+  log "Install Apache Kafka C/C++ client library"
+  # TODO: asap, replace the build process below with package install
+  # sudo apt-get install -y librdkafka1 librdkafka-dev
+  sudo apt-get install -y build-essential
+  git clone https://github.com/edenhill/librdkafka.git ~/librdkafka
+  cd ~/librdkafka
+  git checkout -b v0.9.5 v0.9.5
+  # TODO: Barometer VES guide to clarify specific prerequisites for Ubuntu
+  sudo apt-get install -y libpthread-stubs0-dev
+  sudo apt-get install -y libssl-dev
+  sudo apt-get install -y libsasl2-dev
+  sudo apt-get install -y liblz4-dev
+  ./configure --prefix=/usr
+  make
+  sudo make install
 
+  log "Install collectd"
+  # TODO: asap, replace the build process below with package install
+  # sudo apt-get install -y collectd
   log "Build collectd with Kafka support"
   git clone https://github.com/collectd/collectd.git ~/collectd
   cd ~/collectd
@@ -221,27 +223,19 @@ function setup_collectd() {
   log "setup VES collectd config for VES $ves_mode mode"
   if [[ "$ves_mode" == "node" ]]; then
     # TODO: Barometer VES guide to clarify prerequisites install for Ubuntu
-    log "setup additional prerequisites for VES host mode"
+    log "setup additional prerequisites for VES node mode"
     sudo apt-get install -y libxml2-dev libpciaccess-dev libyajl-dev \
       libdevmapper-dev
 
+    log "start libvirtd"
     # TODO: install libvirt from source to enable all features per 
     # http://docs.opnfv.org/en/latest/submodules/barometer/docs/release/userguide/feature.userguide.html#virt-plugin
     sudo systemctl start libvirtd
 
-    # TODO: supposed to be merged with main collectd repo, but without this
-    # collectd still fails "plugin_load: Could not find plugin "virt" in /opt/collectd/lib/collectd" 
-    rm -rf /tmp/ves/collectd-virt
-    git clone https://github.com/maryamtahhan/collectd /tmp/ves/collectd-virt
-    cd /tmp/ves/collectd-virt
-    ./build.sh
-    ./configure --enable-syslog --enable-logfile --enable-debug
-    make
-    sudo make install
+#    # TODO: fix for journalctl -xe report "... is marked executable"
+#    sudo chmod 744 /etc/systemd/system/collectd.service
 
-    # TODO: fix for journalctl -xe report "... is marked executable"
-    sudo chmod 744 /etc/systemd/system/collectd.service
-
+#    cat <<EOF | sudo tee -a /etc/collectd/collectd.conf
     cat <<EOF | sudo tee -a /opt/collectd/etc/collectd.conf
 # for VES plugin
 LoadPlugin logfile
@@ -304,6 +298,7 @@ LoadPlugin write_kafka
 </Plugin>
 EOF
   else
+#    cat <<EOF | sudo tee -a /etc/collectd/collectd.conf
     cat <<EOF | sudo tee -a /opt/collectd/etc/collectd.conf
 # for VES plugin
 LoadPlugin logfile
@@ -354,12 +349,13 @@ LoadPlugin match_regex
 </Chain>
 EOF
   fi
+  log "collectd config updated"
 
 #  sudo sed -i -- "s/#Hostname    \"localhost\"/Hostname    \"$HOSTNAME\"/" /opt/collectd/etc/collectd.conf
 
-  if [[ $(grep -c $ves_hostname /etc/hosts) -eq 0 ]]; then
-    log "add to /etc/hosts: $ves_kafka_host $ves_hostname"
-    echo "$ves_kafka_host $ves_hostname" | sudo tee -a /etc/hosts
+  if [[ $(grep -c $ves_kafka_hostname /etc/hosts) -eq 0 ]]; then
+    log "add to /etc/hosts: $ves_kafka_host $ves_kafka_hostname"
+    echo "$ves_kafka_host $ves_kafka_hostname" | sudo tee -a /etc/hosts
   fi
   log "restart collectd to apply updated config"
   sudo systemctl restart collectd
@@ -368,23 +364,83 @@ EOF
 function setup_agent() {
   log "setup VES agent"
   source /tmp/ves/ves_env.sh
-  cd /tmp/ves/tools
-  sudo docker build -t ves-agent ves-agent
-  sudo docker run -it -d \
-    -e ves_mode=$ves_mode \
-    -e ves_host=$ves_host  \
-    -e ves_port=$ves_port \
-    -e ves_path=$ves_path \
-    -e ves_topic=$ves_topic \
-    -e ves_https=$ves_https \
-    -e ves_user=$ves_user \
-    -e ves_pass=$ves_pass \
-    -e ves_interval=$ves_interval \
-    -e ves_version=$ves_version \
-    -e ves_kafka_port=$ves_kafka_port \
-    -e ves_kafka_host=$ves_kafka_host \
-    -e ves_hostname=$ves_hostname \
-    --name ves-agent ves-agent
+
+  log "deploy the VES agent container"
+  if [[ "$1" == "cloudify" ]]; then
+    cd /tmp/ves/tools/cloudify
+    # Cloudify is deployed on the k8s master node
+    source ~/k8s_env.sh
+    manager_ip=$k8s_master
+    log "copy kube config from k8s master for insertion into blueprint"
+    scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ubuntu@$manager_ip:/home/ubuntu/.kube/config ves-agent/kube.config
+
+    log "package the blueprint"
+    # CLI: cfy blueprints package -o /tmp/$bp $bp
+    tar ckf /tmp/blueprint.tar ves-agent
+
+    log "upload the blueprint"
+    # CLI: cfy blueprints upload -t default_tenant -b $bp /tmp/$bp.tar.gz
+    curl -s -X PUT -u admin:admin --header 'Tenant: default_tenant' \
+      --header "Content-Type: application/octet-stream" -o /tmp/json \
+      http://$manager_ip/api/v3.1/blueprints/ves-agent?application_file_name=blueprint.yaml \
+      -T /tmp/blueprint.tar
+
+    inputs="{ \
+      \"ves_mode\": \"$ves_mode\",
+      \"ves_host\": \"$ves_host\",
+      \"ves_port\": \"$ves_port\",
+      \"ves_path\": \"$ves_path\",
+      \"ves_topic\": \"$ves_topic\",
+      \"ves_https\": \"$ves_https\",
+      \"ves_user\": \"$ves_user\",
+      \"ves_pass\": \"$ves_pass\",
+      \"ves_interval\": \"$ves_interval\",
+      \"ves_version\": \"$ves_version\", 
+      \"ves_kafka_port\": \"$ves_kafka_port\",
+      \"ves_kafka_host\": \"$ves_kafka_host\",
+      \"ves_kafka_hostname\": \"$ves_kafka_hostname\"}"
+
+    log "create a deployment for the blueprint"
+    # CLI: cfy deployments create -t default_tenant -b $bp $bp
+    curl -s -X PUT -u admin:admin --header 'Tenant: default_tenant' \
+      --header "Content-Type: application/json" -o /tmp/json \
+      -d "{\"blueprint_id\": \"ves-agent\", \"inputs\": $inputs}" \
+      http://$manager_ip/api/v3.1/deployments/ves-agent
+    sleep 10
+
+    # CLI: cfy workflows list -d $bp
+
+    log "install the deployment pod and service"
+    # CLI: cfy executions start install -d $bp
+    curl -s -X POST -u admin:admin --header 'Tenant: default_tenant' \
+      --header "Content-Type: application/json" -o /tmp/json \
+      -d "{\"deployment_id\":\"ves-agent\", \"workflow_id\":\"install\"}" \
+      http://$manager_ip/api/v3.1/executions
+  else
+    sudo docker run -it -d \
+      -e ves_mode=$ves_mode \
+      -e ves_host=$ves_host  \
+      -e ves_port=$ves_port \
+      -e ves_path=$ves_path \
+      -e ves_topic=$ves_topic \
+      -e ves_https=$ves_https \
+      -e ves_user=$ves_user \
+      -e ves_pass=$ves_pass \
+      -e ves_interval=$ves_interval \
+      -e ves_version=$ves_version \
+      -e ves_kafka_port=$ves_kafka_port \
+      -e ves_kafka_host=$ves_kafka_host \
+      -e ves_kafka_hostname=$ves_kafka_hostname \
+      --name ves-agent blsaws/ves-agent:latest
+  fi
+
+  # debug hints
+  # sudo docker exec -it ves-agent apt-get install -y wget
+  # sudo docker exec -it ves-agent wget http://www-eu.apache.org/dist/kafka/0.11.0.2/kafka_2.11-0.11.0.2.tgz -O /opt/ves/kafka_2.11-0.11.0.2.tgz
+  # sudo docker exec -it ves-agent tar -xvzf /opt/ves/kafka_2.11-0.11.0.2.tgz
+  # sudo docker exec -it ves-agent kafka_2.11-0.11.0.2/bin/kafka-console-consumer.sh --zookeeper <kafka server ip>:2181 --topic collectd
+  # /tmp/ves/kafka_2.11-0.11.0.2/bin/kafka-console-consumer.sh --zookeeper localhost:2181 --topic collectd
 }
 
 function setup_collector() {
@@ -392,24 +448,19 @@ function setup_collector() {
   $2 $3 $4
 
   log "install prerequistes"
-  sudo apt-get install -y  jq
+  sudo apt-get install -y jq
 
-  ves_hostname=$HOSTNAME
-  export ves_hostname
   ves_host=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
   export ves_host
   setup_env
 
-  echo "ves_influxdb_host=$ves_influxdb_host"
-  echo "ves_grafana_host=$ves_grafana_host"
-
-  if [[ "$ves_influxdb_host" == "" ]]; then
+  if ! curl http://$ves_influxdb_host/ping ; then
     # TODO: migrate to deployment via Helm
     log "setup influxdb container"
     ves_influxdb_host="$ves_host:8086"
     export ves_influxdb_host
-    sed -i -- "s/ves_influxdb_host=/ves_influxdb_host=$ves_influxdb_host/" \
-      /tmp/ves/ves_env.sh
+    rm /tmp/ves/ves_env.sh
+    setup_env
     sudo docker run -d --name=ves-influxdb -p 8086:8086 influxdb
     status=$(sudo docker inspect ves-influxdb | jq -r '.[0].State.Status')
     while [[ "x$status" != "xrunning" ]]; do
@@ -425,13 +476,14 @@ function setup_collector() {
       sleep 10
     done
   fi
+  echo "ves_influxdb_host=$ves_influxdb_host"
 
   log "setup InfluxDB database"
   # TODO: check if pre-existing and skip
   curl -X POST http://$ves_influxdb_host/query \
     --data-urlencode "q=CREATE DATABASE veseventsdb"
 
-  if [[ "$ves_grafana_host" == "" ]]; then
+  if ! curl http://$ves_grafana_host ; then
     # TODO: migrate to deployment via Helm
     log "install Grafana container"
     ves_grafana_host="$ves_host:3000"
@@ -448,6 +500,7 @@ function setup_collector() {
       status=$(sudo docker inspect ves-grafana | jq -r '.[0].State.Status')
     done
     log "Grafana container state is $status"
+    echo "ves_grafana_host=$ves_grafana_host"
 
     log "wait for Grafana API to be active"
     while ! curl http://$ves_grafana_host ; do
@@ -487,66 +540,58 @@ EOF
 
   log "setup collector container"
   # TODO: migrate to deployment via Helm
-  cd /tmp/ves
-  touch monitor.log
-  rm -rf /tmp/ves/evel-test-collector
-  git clone https://github.com/att/evel-test-collector.git
-  sed -i -- \
-    "s~log_file = /var/log/att/collector.log~log_file = /opt/ves/collector.log~" \
-    evel-test-collector/config/collector.conf
-  sed -i -- "s/vel_domain = 127.0.0.1/vel_domain = $ves_host/g" \
-    evel-test-collector/config/collector.conf
-  sed -i -- "s/vel_username =/vel_username = $ves_user/g" \
-    evel-test-collector/config/collector.conf
-  sed -i -- "s/vel_password =/vel_password = $ves_pass/g" \
-    evel-test-collector/config/collector.conf
-  sed -i -- "s~vel_path = vendor_event_listener/~vel_path = $ves_path~g" \
-    evel-test-collector/config/collector.conf
-  sed -i -- "s~vel_topic_name = example_vnf~vel_topic_name = $ves_topic~g" \
-    evel-test-collector/config/collector.conf
-  sed -i -- "/vel_topic_name = /a influxdb = $ves_host" \
-    evel-test-collector/config/collector.conf
+  sudo docker run -it -d -p 30000:30000 \
+    -e ves_host=$ves_host  \
+    -e ves_port=$ves_port \
+    -e ves_path=$ves_path \
+    -e ves_topic=$ves_topic \
+    -e ves_https=$ves_https \
+    -e ves_user=$ves_user \
+    -e ves_pass=$ves_pass \
+    -e ves_interval=$ves_interval \
+    -e ves_version=$ves_version \
+    -e ves_influxdb_host=$ves_influxdb_host \
+    --name ves-collector blsaws/ves-collector:latest
 
-  cp /tmp/ves/tools/monitor.py \
-    evel-test-collector/code/collector/monitor.py
-
-  # Note below: python (2.7) is required due to dependency on module 'ConfigParser'
-  cat <<EOF >/tmp/ves/setup-collector.sh
-apt-get update
-apt-get upgrade -y
-apt-get install -y python python-jsonschema python-pip
-pip install requests
-python /opt/ves/evel-test-collector/code/collector/monitor.py \
---config /opt/ves/evel-test-collector/config/collector.conf \
---influxdb $ves_host \
---section default > /opt/ves/monitor.log 2>&1 &
-EOF
-
-  sudo docker run -it -d -v /tmp/ves:/opt/ves --name=ves-collector \
-    -p 30000:30000 ubuntu:xenial /bin/bash
-  sudo docker exec ves-collector /bin/bash /opt/ves/setup-collector.sh
   # debug hints
   # sudo docker exec -it ves-collector apt-get install -y tcpdump
   # sudo docker exec -it ves-collector tcpdump -A -v -s 0 -i any port 30000
   # curl http://$ves_host:30000
   # sudo docker exec -it ves-collector /bin/bash
-  # ~/kafka_2.11-0.11.0.2/bin/kafka-console-consumer.sh --zookeeper localhost:2181 --topic collectd
 }
 
 function clean() {
-  log "clean installation for $1 at $2"
-  if [[ "$1" == "master" ]]; then
-    cs="ves-agent ves-collector ves-grafana ves-influxdb"
-    for c in $cs; do
-      log "stop and remove container $c"
-      sudo docker stop $c
-      sudo docker rm -v $c
-    done
-  fi
-  log "remove collectd config for VES"
-  sudo sed -i -- '/VES plugin/,$d' /opt/collectd/etc/collectd.conf
-  sudo systemctl restart collectd
-  sudo rm -rf /tmp/ves
+  log "clean installation"
+  master=$1
+  workers="$2"
+
+  all_nodes="$master $workers"
+  for node in $all_nodes; do 
+    log "remove collectd config for VES at node $node"
+    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ubuntu@$node <<EOF
+sudo sed -i -- '/VES plugin/,\$d' opt/collectd/etc/collectd.conf
+#sudo sed -i -- '/VES plugin/,\$d' /etc/collectd/collectd.conf
+sudo systemctl restart collectd
+sudo rm -rf /tmp/ves
+EOF
+  done
+
+  log "VES datasources and dashboards at grafana server, if needed"
+  curl -X DELETE \
+    http://$ves_grafana_auth@$ves_grafana_host/api/datasources/name/VESEvents
+  curl -X DELETE \
+    http://$ves_grafana_auth@$ves_grafana_host/api/dashboards/db/ves-demo
+
+  log "Remove VES containers and collectd config at master node"
+  ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ubuntu@$master <<'EOF'
+cs="ves-agent ves-collector ves-grafana ves-influxdb"
+for c in $cs; do
+  sudo docker stop $c
+  sudo docker rm -v $c
+done
+EOF
 }
 
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
@@ -560,7 +605,7 @@ case "$1" in
     setup_collectd
     ;;
   "agent")
-    setup_agent
+    setup_agent $2
     ;;
   "collector")
     setup_collector
@@ -569,7 +614,7 @@ case "$1" in
     setup_kafka 
     ;;
   "clean")
-    clean $2 $3
+    clean $2 "$3"
     ;;
   *)
     grep '#. ' $0
