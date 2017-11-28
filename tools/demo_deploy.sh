@@ -92,9 +92,6 @@ ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
   bash /tmp/ves/tools/ves-setup.sh collector
   bash /tmp/ves/tools/ves-setup.sh kafka
   bash /tmp/ves/tools/ves-setup.sh agent $cloudify
-  ves_collectd=$ves_collectd
-  export ves_collectd
-  bash /tmp/ves/tools/ves-setup.sh collectd
 EOF
 
 scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
@@ -102,17 +99,20 @@ scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
 
 echo; echo "$0 $(date): VES Grafana dashboards are available at http://$master:3001 (login as admin/admin)"
 
-for node in $workers; do
+nodes="$master $workers"
+for node in $nodes; do
   echo; echo "$0 $(date): Setting up collectd at $node"
-  scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-    ~/ves ubuntu@$node:/tmp
+  if [[ "$node" != "$master" ]]; then
+    scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ~/ves ubuntu@$node:/tmp
+  fi
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-    ubuntu@$node <<EOF
+    ubuntu@$node <<EOF > /dev/null 2>&1 &
   ves_kafka_host=$master
   export ves_kafka_host
   ves_kafka_hostname=$ves_kafka_hostname
   export ves_kafka_hostname
-  ves_collectd=$ves_collectd
+  ves_collectd=build
   export ves_collectd
   bash /tmp/ves/tools/ves-setup.sh collectd
 EOF
