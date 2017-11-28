@@ -86,16 +86,22 @@ function log() {
 
 function common_prereqs() {
   log "install common prerequisites"
-  if [[ ! -f /.dockerenv ]]; then dosudo="sudo"; fi
-  $dosudo apt-get update
-  $dosudo apt-get install -y git
-  # Required for kafka
-  $dosudo apt-get install -y default-jre
-  $dosudo apt-get install -y zookeeperd
-  $dosudo apt-get install -y python-pip
-  $dosudo pip install kafka-python
-  # Required for building collectd
-  $dosudo apt-get install -y pkg-config
+    if [ "$dist" == "Ubuntu" ]; then
+    sudo apt-get update
+    sudo apt-get install -y git
+    # Required for kafka
+    sudo apt-get install -y default-jre
+    sudo apt-get install -y zookeeperd
+    sudo apt-get install -y python-pip
+  else
+    sudo yum update -y
+    # per http://aurora.apache.org/documentation/0.12.0/installing/#centos-7
+    sudo yum install -y https://archive.cloudera.com/cdh5/one-click-install/redhat/7/x86_64/cloudera-cdh-5-0.x86_64.rpm
+    sudo yum install -y java-1.6.0-openjdk zookeeper
+    sudo zookeeper-server start
+    sudo yum install -y gcc python-pip python-devel
+  fi
+  sudo pip install kafka-python
 }
 
 function setup_env() {
@@ -180,30 +186,45 @@ function setup_collectd() {
   log "Install Apache Kafka C/C++ client library"
   # TODO: asap, replace the build process below with package install
   # sudo apt-get install -y librdkafka1 librdkafka-dev
-  sudo apt-get install -y build-essential
+  if [ "$dist" == "Ubuntu" ]; then
+    sudo apt-get install -y build-essential
+  else
+    sudo yum group install -y 'Development Tools'
+  fi
   git clone https://github.com/edenhill/librdkafka.git ~/librdkafka
   cd ~/librdkafka
   git checkout -b v0.9.5 v0.9.5
   # TODO: Barometer VES guide to clarify specific prerequisites for Ubuntu
-  sudo apt-get install -y libpthread-stubs0-dev
-  sudo apt-get install -y libssl-dev
-  sudo apt-get install -y libsasl2-dev
-  sudo apt-get install -y liblz4-dev
+  if [ "$dist" == "Ubuntu" ]; then
+    sudo apt-get install -y libpthread-stubs0-dev libssl-dev libsasl2-dev \
+      liblz4-dev
+  fi
   ./configure --prefix=/usr
   make
   sudo make install
 
   log "Install collectd"
   if [[ "$ves_collectd" != "build" ]]; then
-    sudo apt-get install -y collectd
+    if [ "$dist" == "Ubuntu" ]; then
+      sudo apt-get install -y collectd
+    else
+      sudo yum install -y collectd
+    fi
   else
+    log "Install collectd build prerequisites"
+    if [ "$dist" == "Ubuntu" ]; then
+      sudo apt-get install -y pkg-config
+    fi
+
     log "Build collectd with Kafka support"
     git clone https://github.com/collectd/collectd.git ~/collectd
     cd ~/collectd
     # TODO: Barometer VES guide to clarify specific prerequisites for Ubuntu
-    sudo apt-get install -y flex bison
-    sudo apt-get install -y autoconf
-    sudo apt-get install -y libtool
+    if [ "$dist" == "Ubuntu" ]; then
+      sudo apt-get install -y flex bison
+      sudo apt-get install -y autoconf
+      sudo apt-get install -y libtool
+    fi
     ./build.sh
     ./configure --with-librdkafka=/usr --without-perl-bindings --enable-perl=no
     make
@@ -232,8 +253,13 @@ function setup_collectd() {
   if [[ "$ves_mode" == "node" ]]; then
     # TODO: Barometer VES guide to clarify prerequisites install for Ubuntu
     log "setup additional prerequisites for VES node mode"
-    sudo apt-get install -y libxml2-dev libpciaccess-dev libyajl-dev \
-      libdevmapper-dev
+    if [ "$dist" == "Ubuntu" ]; then
+      sudo apt-get install -y libxml2-dev libpciaccess-dev libyajl-dev \
+        libdevmapper-dev
+    else
+      sudo yum install -y libxml2-devel libpciaccess-devel yajl-devel \
+        device-mapper-devel
+    fi
 
 #    # TODO: fix for journalctl -xe report "... is marked executable"
 #    sudo chmod 744 /etc/systemd/system/collectd.service
@@ -294,8 +320,7 @@ EOF
       log "start libvirtd"
       # TODO: install libvirt from source to enable all features per 
       # http://docs.opnfv.org/en/latest/submodules/barometer/docs/release/userguide/feature.userguide.html#virt-plugin
-      # sudo systemctl start libvirtd
-
+      sudo systemctl start libvirtd
       cat <<EOF | sudo tee -a $collectd_conf
 LoadPlugin virt
 <Plugin virt>
@@ -459,7 +484,11 @@ function setup_collector() {
   $2 $3 $4
 
   log "install prerequistes"
-  sudo apt-get install -y jq
+  if [ "$dist" == "Ubuntu" ]; then
+    sudo apt-get install -y jq
+  else
+    sudo yum install -y jq
+  fi
 
   ves_host=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
   export ves_host
