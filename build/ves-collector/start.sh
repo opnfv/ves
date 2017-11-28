@@ -34,7 +34,15 @@ sed -i -- "s~vel_topic_name = example_vnf~vel_topic_name = $ves_topic~g" \
 sed -i -- "/vel_topic_name = /a influxdb = $ves_influxdb_host" \
   evel-test-collector/config/collector.conf
 
-python /opt/ves/evel-test-collector/code/collector/monitor.py \
-  --config /opt/ves/evel-test-collector/config/collector.conf \
-  --influxdb $ves_influxdb_host \
-  --section default > /opt/ves/monitor.log 2>&1
+if [[ "$ves_loglevel" != "" ]]; then 
+  python /opt/ves/evel-test-collector/code/collector/monitor.py \
+    --config /opt/ves/evel-test-collector/config/collector.conf \
+    --influxdb $ves_influxdb_host \
+    --section default > /opt/ves/monitor.log 2>&1
+else
+  python /opt/ves/evel-test-collector/code/collector/monitor.py \
+    --config /opt/ves/evel-test-collector/config/collector.conf \
+    --influxdb $ves_influxdb_host \
+    --section default
+fi
+

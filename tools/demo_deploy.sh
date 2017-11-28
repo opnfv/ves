@@ -39,6 +39,7 @@
 #.     ves_influxdb_auth: authentication for the influxdb service
 #.     ves_grafana_host: ip:port of the grafana service
 #.     ves_grafana_auth: authentication for the grafana service
+#.     ves_loglevel: loglevel for VES Agent and Collector (ERROR|DEBUG)
 #.
 #. For deployment in a kubernetes cluster as setup by OPNFV Models scripts:
 #. - k8s cluster setup as in OPNFV Models repo tools/kubernetes/demo_deploy.sh
@@ -88,6 +89,8 @@ ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
   export ves_grafana_host
   ves_grafana_auth=$ves_grafana_auth
   export ves_grafana_auth
+  ves_loglevel=$ves_loglevel
+  export ves_loglevel
   env | grep ves
   bash /tmp/ves/tools/ves-setup.sh collector
   bash /tmp/ves/tools/ves-setup.sh kafka

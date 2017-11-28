@@ -50,6 +50,8 @@
 #.   ves_influxdb_auth: credentials in form "user/pass" (default: none)
 #.   ves_grafana_host: grafana host:port (default: none)
 #.   ves_grafana_auth: credentials in form "user/pass" (default: admin/admin)
+#.   ves_loglevel: loglevel for VES Agent and Collector (ERROR|DEBUG)
+#.   ves_cloudtype: kubernetes|openstack (default:kubernetes)
 #.
 #. Usage:
 #.   git clone https://gerrit.opnfv.org/gerrit/ves /tmp/ves
@@ -118,6 +120,8 @@ ves_influxdb_host="${ves_influxdb_host:=localhost:8086}"
 ves_influxdb_auth="${ves_influxdb_auth:=}"
 ves_grafana_host="${ves_grafana_host:=localhost:3000}"
 ves_grafana_auth="${ves_grafana_auth:=admin:admin}"
+ves_loglevel="${ves_loglevel:=}"
+ves_cloudtype="${ves_cloudtype:=kubernetes}"
 export ves_mode
 export ves_host
 export ves_port
@@ -134,6 +138,8 @@ export ves_influxdb_host
 export ves_influxdb_auth
 export ves_grafana_host
 export ves_grafana_auth
+export ves_loglevel
+export ves_cloudtype
 EOF
 
   source /tmp/ves/ves_env.sh
@@ -229,11 +235,6 @@ function setup_collectd() {
     sudo apt-get install -y libxml2-dev libpciaccess-dev libyajl-dev \
       libdevmapper-dev
 
-    log "start libvirtd"
-    # TODO: install libvirt from source to enable all features per 
-    # http://docs.opnfv.org/en/latest/submodules/barometer/docs/release/userguide/feature.userguide.html#virt-plugin
-    sudo systemctl start libvirtd
-
 #    # TODO: fix for journalctl -xe report "... is marked executable"
 #    sudo chmod 744 /etc/systemd/system/collectd.service
 
@@ -252,16 +253,6 @@ LoadPlugin csv
  DataDir "/work-dir/collectd/install/var/lib/csv"
  StoreRates false
 </Plugin>
-
-# TODO: complete the virt plugin install before enabling
-#LoadPlugin virt
-#<Plugin virt>
-#  Connection "qemu:///system"
-#  RefreshInterval 60
-#  HostnameFormat uuid
-#  PluginInstanceFormat name
-#  ExtraStats "cpu_util"
-#</Plugin>
 
 LoadPlugin target_set
 LoadPlugin match_regex
@@ -298,6 +289,24 @@ LoadPlugin write_kafka
   </Topic>
 </Plugin>
 EOF
+
+    if [[ "$ves_cloudtype" == "openstack" ]]; then
+      log "start libvirtd"
+      # TODO: install libvirt from source to enable all features per 
+      # http://docs.opnfv.org/en/latest/submodules/barometer/docs/release/userguide/feature.userguide.html#virt-plugin
+      # sudo systemctl start libvirtd
+
+      cat <<EOF | sudo tee -a $collectd_conf
+LoadPlugin virt
+<Plugin virt>
+  Connection "qemu:///system"
+  RefreshInterval 60
+  HostnameFormat uuid
+  PluginInstanceFormat name
+  ExtraStats "cpu_util"
+</Plugin>
+EOF
+    fi
   else
     cat <<EOF | sudo tee -a $collectd_conf
 # for VES plugin
@@ -399,7 +408,8 @@ function setup_agent() {
       \"ves_version\": \"$ves_version\", 
       \"ves_kafka_port\": \"$ves_kafka_port\",
       \"ves_kafka_host\": \"$ves_kafka_host\",
-      \"ves_kafka_hostname\": \"$ves_kafka_hostname\"}"
+      \"ves_kafka_hostname\": \"$ves_kafka_hostname\",
+      \"ves_loglevel\": \"$ves_loglevel\"}"
 
     log "create a deployment for the blueprint"
     # CLI: cfy deployments create -t default_tenant -b $bp $bp
@@ -432,6 +442,7 @@ function setup_agent() {
       -e ves_kafka_port=$ves_kafka_port \
       -e ves_kafka_host=$ves_kafka_host \
       -e ves_kafka_hostname=$ves_kafka_hostname \
+      -e ves_loglevel=$ves_loglevel \
       --name ves-agent blsaws/ves-agent:latest
   fi
 
@@ -551,6 +562,7 @@ EOF
     -e ves_interval=$ves_interval \
     -e ves_version=$ves_version \
     -e ves_influxdb_host=$ves_influxdb_host \
+    -e ves_loglevel=$ves_loglevel \
     --name ves-collector blsaws/ves-collector:latest
 
   # debug hints

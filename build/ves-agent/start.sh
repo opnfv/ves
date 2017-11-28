@@ -38,7 +38,14 @@ EOF
 
 cat ves_app_config.conf
 echo "ves_mode=$ves_mode"
-python ves_app.py --events-schema=$ves_mode.yaml --loglevel DEBUG \
+
+if [[ "$ves_loglevel" == "" ]]; then 
+  ves_loglevel=ERROR
+fi
+
+python ves_app.py --events-schema=$ves_mode.yaml --loglevel $ves_loglevel \
   --config=ves_app_config.conf
+
+# Dump ves_app.log if the command above exits (fails)
 echo "*** ves_app.log ***"
 cat ves_app.log
