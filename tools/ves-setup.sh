@@ -51,7 +51,6 @@
 #.   ves_grafana_host: grafana host:port (default: none)
 #.   ves_grafana_auth: credentials in form "user/pass" (default: admin/admin)
 #.   ves_loglevel: loglevel for VES Agent and Collector (ERROR|DEBUG)
-#.   ves_cloudtype: kubernetes|openstack (default:kubernetes)
 #.
 #. Usage:
 #.   git clone https://gerrit.opnfv.org/gerrit/ves /tmp/ves
@@ -86,15 +85,16 @@ function log() {
 
 function common_prereqs() {
   log "install common prerequisites"
-    if [ "$dist" == "Ubuntu" ]; then
+    if [[ "$dist" == "ubuntu" ]]; then
     sudo apt-get update
-    sudo apt-get install -y git
+    sudo apt-get install -y git wget
     # Required for kafka
     sudo apt-get install -y default-jre
     sudo apt-get install -y zookeeperd
     sudo apt-get install -y python-pip
   else
     sudo yum update -y
+    sudo yum install -y git wget
     # per http://aurora.apache.org/documentation/0.12.0/installing/#centos-7
     sudo yum install -y https://archive.cloudera.com/cdh5/one-click-install/redhat/7/x86_64/cloudera-cdh-5-0.x86_64.rpm
     sudo yum install -y java-1.6.0-openjdk zookeeper
@@ -186,7 +186,7 @@ function setup_collectd() {
   log "Install Apache Kafka C/C++ client library"
   # TODO: asap, replace the build process below with package install
   # sudo apt-get install -y librdkafka1 librdkafka-dev
-  if [ "$dist" == "Ubuntu" ]; then
+  if [[ "$dist" == "ubuntu" ]]; then
     sudo apt-get install -y build-essential
   else
     sudo yum group install -y 'Development Tools'
@@ -195,7 +195,7 @@ function setup_collectd() {
   cd ~/librdkafka
   git checkout -b v0.9.5 v0.9.5
   # TODO: Barometer VES guide to clarify specific prerequisites for Ubuntu
-  if [ "$dist" == "Ubuntu" ]; then
+  if [[ "$dist" == "ubuntu" ]]; then
     sudo apt-get install -y libpthread-stubs0-dev libssl-dev libsasl2-dev \
       liblz4-dev
   fi
@@ -205,29 +205,42 @@ function setup_collectd() {
 
   log "Install collectd"
   if [[ "$ves_collectd" != "build" ]]; then
-    if [ "$dist" == "Ubuntu" ]; then
+    if [[ "$dist" == "ubuntu" ]]; then
       sudo apt-get install -y collectd
     else
       sudo yum install -y collectd
     fi
   else
     log "Install collectd build prerequisites"
-    if [ "$dist" == "Ubuntu" ]; then
+    if [[ "$dist" == "ubuntu" ]]; then
       sudo apt-get install -y pkg-config
+    fi
+    if [[ "$ves_mode" == "node" ]]; then
+      # TODO: Barometer VES guide to clarify prerequisites install for Ubuntu
+      log "setup additional prerequisites for VES node mode"
+      if [[ "$dist" == "ubuntu" ]]; then
+        sudo apt-get install -y libxml2-dev libpciaccess-dev libyajl-dev \
+          libdevmapper-dev libvirt-dev
+      else
+        sudo yum install -y libxml2-devel libpciaccess-devel yajl-devel \
+          device-mapper-devel libvirt-devel
+        # TODO: install libvirt from source to enable all features per 
+        # http://docs.opnfv.org/en/latest/submodules/barometer/docs/release/userguide/feature.userguide.html#virt-plugin
+      fi
     fi
 
     log "Build collectd with Kafka support"
     git clone https://github.com/collectd/collectd.git ~/collectd
     cd ~/collectd
     # TODO: Barometer VES guide to clarify specific prerequisites for Ubuntu
-    if [ "$dist" == "Ubuntu" ]; then
+    if [[ "$dist" == "ubuntu" ]]; then
       sudo apt-get install -y flex bison
       sudo apt-get install -y autoconf
       sudo apt-get install -y libtool
     fi
     ./build.sh
     ./configure --with-librdkafka=/usr --without-perl-bindings --enable-perl=no
-    make
+    sudo make
     sudo make install
 
     # TODO: Barometer VES guide to clarify collectd.service is correct
@@ -246,21 +259,19 @@ function setup_collectd() {
     sudo mv systemd.collectd.service collectd.service
     sudo chmod +x collectd.service
   fi
+
+  if [[ "$dist" == "centos" ]]; then
+    # TODO: fix this workaround for issue preventing collectd from working
+    # in var /log/messages
+    # ... collectd: ... check_create_dir: mkdir (/work-dir): Permission denied
+    sudo mkdir /work-dir
+  fi
+
   sudo systemctl daemon-reload
-  sudo systemctl start collectd.service
+  sudo systemctl restart collectd.service
 
   log "setup VES collectd config for VES $ves_mode mode"
   if [[ "$ves_mode" == "node" ]]; then
-    # TODO: Barometer VES guide to clarify prerequisites install for Ubuntu
-    log "setup additional prerequisites for VES node mode"
-    if [ "$dist" == "Ubuntu" ]; then
-      sudo apt-get install -y libxml2-dev libpciaccess-dev libyajl-dev \
-        libdevmapper-dev
-    else
-      sudo yum install -y libxml2-devel libpciaccess-devel yajl-devel \
-        device-mapper-devel
-    fi
-
 #    # TODO: fix for journalctl -xe report "... is marked executable"
 #    sudo chmod 744 /etc/systemd/system/collectd.service
 
@@ -316,11 +327,7 @@ LoadPlugin write_kafka
 </Plugin>
 EOF
 
-    if [[ "$ves_cloudtype" == "openstack" ]]; then
-      log "start libvirtd"
-      # TODO: install libvirt from source to enable all features per 
-      # http://docs.opnfv.org/en/latest/submodules/barometer/docs/release/userguide/feature.userguide.html#virt-plugin
-      sudo systemctl start libvirtd
+    if [[ -d /etc/nova ]]; then
       cat <<EOF | sudo tee -a $collectd_conf
 LoadPlugin virt
 <Plugin virt>
@@ -392,6 +399,7 @@ EOF
     echo "$ves_kafka_host $ves_kafka_hostname" | sudo tee -a /etc/hosts
   fi
   log "restart collectd to apply updated config"
+  sudo systemctl daemon-reload
   sudo systemctl restart collectd
 }
 
@@ -484,7 +492,7 @@ function setup_collector() {
   $2 $3 $4
 
   log "install prerequistes"
-  if [ "$dist" == "Ubuntu" ]; then
+  if [[ "$dist" == "ubuntu" ]]; then
     sudo apt-get install -y jq
   else
     sudo yum install -y jq
@@ -634,7 +642,7 @@ done
 EOF
 }
 
-dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
+dist=$(grep --m 1 ID /etc/os-release | awk -F '=' '{print $2}' | sed 's/"//g')
 if [[ $(grep -c $HOSTNAME /etc/hosts) -eq 0 ]]; then 
   echo "$(ip route get 8.8.8.8 | awk '{print $NF; exit}') $HOSTNAME" |\
     sudo tee -a /etc/hosts
