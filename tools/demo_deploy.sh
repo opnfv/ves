@@ -67,9 +67,9 @@ ssh-add $key
 
 echo; echo "$0 $(date): Setting up master node"
 ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-  $user@$master sudo rm -rf /tmp/ves
+  $user@$master mkdir /home/$user/ves
 scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-  ~/ves $user@$master:/tmp
+  ~/ves/tools $user@$master:/home/$user/ves
 ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
   $user@$master <<EOF
   ves_host=$master
@@ -95,23 +95,30 @@ ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
   ves_loglevel=$ves_loglevel
   export ves_loglevel
   env | grep ves
-  bash /tmp/ves/tools/ves-setup.sh collector
-  bash /tmp/ves/tools/ves-setup.sh kafka
-  bash /tmp/ves/tools/ves-setup.sh agent $cloudify
+  bash /home/$user/ves/tools/ves-setup.sh collector
+  bash /home/$user/ves/tools/ves-setup.sh kafka
+  bash /home/$user/ves/tools/ves-setup.sh agent $cloudify
 EOF
 
 scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-  $user@$master:/tmp/ves/ves_env.sh ~/ves/.
+  $user@$master:/home/$user/ves/tools/ves_env.sh ~/ves/tools/.
 
-nodes="$master $workers"
+if [[ "$master" == "$workers" ]]; then
+  nodes=$master
+else
+  nodes="$master $workers"
+fi
+
 for node in $nodes; do
   echo; echo "$0 $(date): Setting up collectd at $node"
   if [[ "$node" != "$master" ]]; then
+    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      $user@$node mkdir /home/$user/ves
     scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ~/ves $user@$node:/tmp
+      ~/ves/tools $user@$node:/home/$user/ves
   fi
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-    $user@$node <<EOF > /dev/null 2>&1 &
+    $user@$node <<EOF > ves-collectd-$node.log 2>&1 &
   ves_kafka_host=$master
   export ves_kafka_host
   ves_kafka_port=$ves_kafka_port
@@ -120,11 +127,9 @@ for node in $nodes; do
   export ves_kafka_hostname
   ves_mode=node
   export ves_mode
-  ves_collectd=build
-  export ves_collectd
-  bash /tmp/ves/tools/ves-setup.sh collectd
+  bash /home/$user/ves/tools/ves-setup.sh collectd
 EOF
 done
 
-echo; echo "$0 $(date): VES Grafana dashboards are available at http://$master:3000 (login as admin/admin)"
+echo; echo "$0 $(date): VES Grafana dashboards are available at http://$ves_grafana_host:3000 (login as admin/admin)"
 

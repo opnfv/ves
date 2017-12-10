@@ -53,15 +53,15 @@
 #.   ves_loglevel: loglevel for VES Agent and Collector (ERROR|DEBUG)
 #.
 #. Usage:
-#.   git clone https://gerrit.opnfv.org/gerrit/ves /tmp/ves
-#.   bash /tmp/ves/ves-setup.sh <collector|kafka|collectd|agent> [cloudify]
+#.   git clone https://gerrit.opnfv.org/gerrit/ves ~/ves
+#.   bash ~/ves/ves-setup.sh <collector|kafka|collectd|agent> [cloudify]
 #.     collector: setup VES collector (test collector) 
 #.     kafka: setup kafka server for VES events from collect agent(s)
 #.     collectd: setup collectd with libvirt plugin, as a kafka publisher
 #.     agent: setup VES agent in host or guest mode, as a kafka consumer
 #.     cloudify: (optional) use cloudify to deploy the component, as setup by
 #.       tools/cloudify/k8s-cloudify.sh in the OPNFV Models repo.
-#.   bash /tmp/ves/ves-setup.sh <master> <workers>
+#.   bash ~/ves/ves-setup.sh <master> <workers>
 #.     master: VES master node IP
 #.     workers: quoted, space-separated list of worker node IPs
 #.
@@ -88,26 +88,14 @@ function common_prereqs() {
     if [[ "$dist" == "ubuntu" ]]; then
     sudo apt-get update
     sudo apt-get install -y git wget
-    # Required for kafka
-    sudo apt-get install -y default-jre
-    sudo apt-get install -y zookeeperd
-    sudo apt-get install -y python-pip
   else
     sudo yum update -y
     sudo yum install -y git wget
-    # per http://aurora.apache.org/documentation/0.12.0/installing/#centos-7
-    sudo yum install -y https://archive.cloudera.com/cdh5/one-click-install/redhat/7/x86_64/cloudera-cdh-5-0.x86_64.rpm
-    sudo yum install -y java-1.6.0-openjdk zookeeper
-    sudo zookeeper-server start
-    sudo yum install -y gcc python-pip python-devel
   fi
-  sudo pip install kafka-python
 }
 
 function setup_env() {
-  if [[ ! -d /tmp/ves ]]; then mkdir /tmp/ves; fi
-  cp $0 /tmp/ves
-  cat <<'EOF' >/tmp/ves/ves_env.sh
+  cat <<'EOF' >~/ves/tools/ves_env.sh
 #!/bin/bash
 ves_mode="${ves_mode:=node}"
 ves_host="${ves_host:=127.0.0.1}"
@@ -148,16 +136,35 @@ export ves_loglevel
 export ves_cloudtype
 EOF
 
-  source /tmp/ves/ves_env.sh
-  echo /tmp/ves/ves_env.sh
+  source ~/ves/tools/ves_env.sh
+  echo ~/ves/tools/ves_env.sh
 }
 
 function setup_kafka() {
   log "setup kafka server"
   common_prereqs
+
+  log "install kafka prerequisites"
+    if [[ "$dist" == "ubuntu" ]]; then
+    sudo apt-get install -y default-jre
+    sudo apt-get install -y zookeeperd
+    sudo apt-get install -y python-pip
+  else
+    # per http://aurora.apache.org/documentation/0.12.0/installing/#centos-7
+    sudo yum install -y https://archive.cloudera.com/cdh5/one-click-install/redhat/7/x86_64/cloudera-cdh-5-0.x86_64.rpm
+    # TODO: Barometer guide: Java 1.7 is needed for Kafka
+    sudo yum install -y java-1.7.0-openjdk
+    # TODO: Barometer guide: both packages and init needed
+    sudo yum install -y zookeeper zookeeper-server
+    sudo service zookeeper-server init
+    sudo zookeeper-server start
+    sudo yum install -y python-pip
+  fi
+  sudo pip install kafka-python
+
   setup_env
 
-  cd /tmp/ves
+  cd ~
   ver="0.11.0.2"
   log "get and unpack kafka_2.11-$ver.tgz"
   wget "http://www-eu.apache.org/dist/kafka/$ver/kafka_2.11-$ver.tgz"
@@ -169,113 +176,22 @@ function setup_kafka() {
   grep delete.topic.enable kafka_2.11-$ver/config/server.properties
   # TODO: Barometer VES guide to clarify hostname must be in /etc/hosts
   sudo nohup kafka_2.11-$ver/bin/kafka-server-start.sh \
-    kafka_2.11-$ver/config/server.properties \
-    > kafka_2.11-$ver/kafka.log 2>&1 &
+    kafka_2.11-$ver/config/server.properties >kafka.log 2>&1 &
 }
 
 function setup_collectd() {
   log "setup collectd"
+
   common_prereqs
-  source /tmp/ves/ves_env.sh
-
-  log "cleanup any previous failed install"
-  sudo rm -rf ~/collectd-virt
-  sudo rm -rf ~/librdkafka
-  sudo rm -rf ~/collectd
-
-  log "Install Apache Kafka C/C++ client library"
-  # TODO: asap, replace the build process below with package install
-  # sudo apt-get install -y librdkafka1 librdkafka-dev
-  if [[ "$dist" == "ubuntu" ]]; then
-    sudo apt-get install -y build-essential
-  else
-    sudo yum group install -y 'Development Tools'
-  fi
-  git clone https://github.com/edenhill/librdkafka.git ~/librdkafka
-  cd ~/librdkafka
-  git checkout -b v0.9.5 v0.9.5
-  # TODO: Barometer VES guide to clarify specific prerequisites for Ubuntu
-  if [[ "$dist" == "ubuntu" ]]; then
-    sudo apt-get install -y libpthread-stubs0-dev libssl-dev libsasl2-dev \
-      liblz4-dev
-  fi
-  ./configure --prefix=/usr
-  make
-  sudo make install
-
-  log "Install collectd"
-  if [[ "$ves_collectd" != "build" ]]; then
-    if [[ "$dist" == "ubuntu" ]]; then
-      sudo apt-get install -y collectd
-    else
-      sudo yum install -y collectd
-    fi
-  else
-    log "Install collectd build prerequisites"
-    if [[ "$dist" == "ubuntu" ]]; then
-      sudo apt-get install -y pkg-config
-    fi
-    if [[ "$ves_mode" == "node" ]]; then
-      # TODO: Barometer VES guide to clarify prerequisites install for Ubuntu
-      log "setup additional prerequisites for VES node mode"
-      if [[ "$dist" == "ubuntu" ]]; then
-        sudo apt-get install -y libxml2-dev libpciaccess-dev libyajl-dev \
-          libdevmapper-dev libvirt-dev
-      else
-        sudo yum install -y libxml2-devel libpciaccess-devel yajl-devel \
-          device-mapper-devel libvirt-devel
-        # TODO: install libvirt from source to enable all features per 
-        # http://docs.opnfv.org/en/latest/submodules/barometer/docs/release/userguide/feature.userguide.html#virt-plugin
-      fi
-    fi
-
-    log "Build collectd with Kafka support"
-    git clone https://github.com/collectd/collectd.git ~/collectd
-    cd ~/collectd
-    # TODO: Barometer VES guide to clarify specific prerequisites for Ubuntu
-    if [[ "$dist" == "ubuntu" ]]; then
-      sudo apt-get install -y flex bison
-      sudo apt-get install -y autoconf
-      sudo apt-get install -y libtool
-    fi
-    ./build.sh
-    ./configure --with-librdkafka=/usr --without-perl-bindings --enable-perl=no
-    sudo make
-    sudo make install
-
-    # TODO: Barometer VES guide to clarify collectd.service is correct
-    log "install collectd as a service"
-    sed -i -- 's~ExecStart=/usr/sbin/collectd~ExecStart=/opt/collectd/sbin/collectd~'\
-      contrib/systemd.collectd.service
-    sed -i -- 's~EnvironmentFile=-/etc/sysconfig/collectd~EnvironmentFile=-/opt/collectd/etc/~'\
-      contrib/systemd.collectd.service
-    sed -i -- 's~EnvironmentFile=-/etc/default/collectd~EnvironmentFile=-/opt/collectd/etc/~'\
-      contrib/systemd.collectd.service
-    sed -i -- 's~CapabilityBoundingSet=~CapabilityBoundingSet=CAP_SETUID CAP_SETGID~'\
-      contrib/systemd.collectd.service
-
-    sudo cp contrib/systemd.collectd.service /etc/systemd/system/
-    cd /etc/systemd/system/
-    sudo mv systemd.collectd.service collectd.service
-    sudo chmod +x collectd.service
-  fi
-
-  if [[ "$dist" == "centos" ]]; then
-    # TODO: fix this workaround for issue preventing collectd from working
-    # in var /log/messages
-    # ... collectd: ... check_create_dir: mkdir (/work-dir): Permission denied
-    sudo mkdir /work-dir
-  fi
-
-  sudo systemctl daemon-reload
-  sudo systemctl restart collectd.service
+  source ~/ves/tools/ves_env.sh
 
   log "setup VES collectd config for VES $ves_mode mode"
+  mkdir ~/collectd
   if [[ "$ves_mode" == "node" ]]; then
 #    # TODO: fix for journalctl -xe report "... is marked executable"
 #    sudo chmod 744 /etc/systemd/system/collectd.service
 
-    cat <<EOF | sudo tee -a $collectd_conf
+    cat <<EOF >~/collectd/collectd.conf
 # for VES plugin
 LoadPlugin logfile
 <Plugin logfile>
@@ -316,7 +232,7 @@ LoadPlugin memory
 LoadPlugin load
 LoadPlugin disk
 # TODO: how to set this option only to apply to VMs (not nodes)
-#LoadPlugin uuid
+LoadPlugin uuid
 
 LoadPlugin write_kafka
 <Plugin write_kafka>
@@ -328,7 +244,7 @@ LoadPlugin write_kafka
 EOF
 
     if [[ -d /etc/nova ]]; then
-      cat <<EOF | sudo tee -a $collectd_conf
+      cat <<EOF >>~/collectd/collectd.conf
 LoadPlugin virt
 <Plugin virt>
   Connection "qemu:///system"
@@ -340,7 +256,7 @@ LoadPlugin virt
 EOF
     fi
   else
-    cat <<EOF | sudo tee -a $collectd_conf
+    cat <<EOF >~/collectd/collectd.conf
 # for VES plugin
 LoadPlugin logfile
 <Plugin logfile>
@@ -392,30 +308,31 @@ EOF
   fi
   log "collectd config updated"
 
-#  sudo sed -i -- "s/#Hostname    \"localhost\"/Hostname    \"$HOSTNAME\"/" /opt/collectd/etc/collectd.conf
-
   if [[ $(grep -c $ves_kafka_hostname /etc/hosts) -eq 0 ]]; then
     log "add to /etc/hosts: $ves_kafka_host $ves_kafka_hostname"
     echo "$ves_kafka_host $ves_kafka_hostname" | sudo tee -a /etc/hosts
   fi
-  log "restart collectd to apply updated config"
-  sudo systemctl daemon-reload
-  sudo systemctl restart collectd
+
+  log "start Barometer container"
+  sudo docker run -tid --net=host --name ves-barometer \
+    -v ~/collectd:/opt/collectd/etc/collectd.conf.d \
+    -v /var/run:/var/run -v /tmp:/tmp --privileged \
+    opnfv/barometer:latest /run_collectd.sh
 }
 
 function setup_agent() {
   log "setup VES agent"
-  source /tmp/ves/ves_env.sh
+  source ~/k8s_env.sh
+  source ~/ves/tools/ves_env.sh
 
   log "deploy the VES agent container"
   if [[ "$1" == "cloudify" ]]; then
-    cd /tmp/ves/tools/cloudify
+    cd ~/ves/tools/cloudify
     # Cloudify is deployed on the k8s master node
-    source ~/k8s_env.sh
     manager_ip=$k8s_master
     log "copy kube config from k8s master for insertion into blueprint"
     scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ubuntu@$manager_ip:/home/ubuntu/.kube/config ves-agent/kube.config
+      $k8s_user@$manager_ip:/home/$k8s_user/.kube/config ves-agent/kube.config
 
     log "package the blueprint"
     # CLI: cfy blueprints package -o /tmp/$bp $bp
@@ -480,11 +397,12 @@ function setup_agent() {
   fi
 
   # debug hints
+  # sudo docker logs ves-agent
   # sudo docker exec -it ves-agent apt-get install -y wget
   # sudo docker exec -it ves-agent wget http://www-eu.apache.org/dist/kafka/0.11.0.2/kafka_2.11-0.11.0.2.tgz -O /opt/ves/kafka_2.11-0.11.0.2.tgz
   # sudo docker exec -it ves-agent tar -xvzf /opt/ves/kafka_2.11-0.11.0.2.tgz
   # sudo docker exec -it ves-agent kafka_2.11-0.11.0.2/bin/kafka-console-consumer.sh --zookeeper <kafka server ip>:2181 --topic collectd
-  # /tmp/ves/kafka_2.11-0.11.0.2/bin/kafka-console-consumer.sh --zookeeper localhost:2181 --topic collectd
+  # ~/kafka_2.11-0.11.0.2/bin/kafka-console-consumer.sh --zookeeper localhost:2181 --topic collectd
 }
 
 function setup_collector() {
@@ -498,17 +416,11 @@ function setup_collector() {
     sudo yum install -y jq
   fi
 
-  ves_host=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
-  export ves_host
   setup_env
 
   if ! curl http://$ves_influxdb_host/ping ; then
     # TODO: migrate to deployment via Helm
     log "setup influxdb container"
-    ves_influxdb_host="$ves_host:8086"
-    export ves_influxdb_host
-    rm /tmp/ves/ves_env.sh
-    setup_env
     sudo docker run -d --name=ves-influxdb -p 8086:8086 influxdb
     status=$(sudo docker inspect ves-influxdb | jq -r '.[0].State.Status')
     while [[ "x$status" != "xrunning" ]]; do
@@ -534,12 +446,6 @@ function setup_collector() {
   if ! curl http://$ves_grafana_host ; then
     # TODO: migrate to deployment via Helm
     log "install Grafana container"
-    ves_grafana_host="$ves_host:3000"
-    ves_grafana_auth="admin:admin"
-    export ves_grafana_host
-    export ves_grafana_auth
-    sed -i -- "s/ves_grafana_host=/ves_grafana_host=$ves_grafana_host/" \
-      /tmp/ves/ves_env.sh
     sudo docker run -d --name ves-grafana -p 3000:3000 grafana/grafana
     status=$(sudo docker inspect ves-grafana | jq -r '.[0].State.Status')
     while [[ "x$status" != "xrunning" ]]; do
@@ -559,7 +465,7 @@ function setup_collector() {
 
   log "add VESEvents datasource to Grafana at http://$ves_grafana_auth@$ves_grafana_host"
   # TODO: check if pre-existing and skip
-  cat <<EOF >/tmp/ves/datasource.json
+  cat <<EOF >~/ves/tools/grafana/datasource.json
 { "name":"VESEvents",
   "type":"influxdb",
   "access":"direct",
@@ -576,14 +482,15 @@ function setup_collector() {
 } 
 EOF
 
+  # Use /home/$USER/ instead of ~ with @
   curl -H "Accept: application/json" -H "Content-type: application/json" \
-    -X POST -d @/tmp/ves/datasource.json \
+    -X POST -d @/home/$USER/ves/tools/grafana/datasource.json \
     http://$ves_grafana_auth@$ves_grafana_host/api/datasources
 
   log "add VES dashboard to Grafana at http://$ves_grafana_auth@$ves_grafana_host"
   curl -H "Accept: application/json" -H "Content-type: application/json" \
     -X POST \
-    -d @/tmp/ves/tools/grafana/Dashboard.json\
+    -d @/home/$USER/ves/tools/grafana/Dashboard.json\
     http://$ves_grafana_auth@$ves_grafana_host/api/dashboards/db	
 
   log "setup collector container"
@@ -603,6 +510,8 @@ EOF
     --name ves-collector blsaws/ves-collector:latest
 
   # debug hints
+  # curl 'http://172.16.0.5:8086/query?pretty=true&db=veseventsdb&q=SELECT%20moving_average%28%22load-shortterm%22%2C%205%29%20FROM%20%22load%22%20WHERE%20time%20%3E%3D%20now%28%29%20-%205m%20GROUP%20BY%20%22system%22'
+  # sudo docker logs ves-collector
   # sudo docker exec -it ves-collector apt-get install -y tcpdump
   # sudo docker exec -it ves-collector tcpdump -A -v -s 0 -i any port 30000
   # curl http://$ves_host:30000
@@ -613,15 +522,20 @@ function clean() {
   log "clean installation"
   master=$1
   workers="$2"
+  source ~/k8s_env.sh
 
-  all_nodes="$master $workers"
-  for node in $all_nodes; do 
-    log "remove collectd config for VES at node $node"
+  if [[ "$master" == "$workers" ]]; then
+    nodes=$master
+  else
+    nodes="$master $workers"
+  fi
+
+  for node in $nodes; do 
+    log "remove config for VES at node $node"
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ubuntu@$node <<EOF
-sudo sed -i -- '/VES plugin/,\$d' $collectd_conf
-sudo systemctl restart collectd
-sudo rm -rf /tmp/ves
+      $k8s_user@$node <<EOF
+sudo rm -rf /home/$k8s_user/ves
+sudo rm -rf /home/$k8s_user/collectd
 EOF
   done
 
@@ -633,8 +547,8 @@ EOF
 
   log "Remove VES containers and collectd config at master node"
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ubuntu@$master <<'EOF'
-cs="ves-agent ves-collector ves-grafana ves-influxdb"
+      $k8s_user@$master <<'EOF'
+cs="ves-agent ves-collector ves-grafana ves-influxdb ves-barometer"
 for c in $cs; do
   sudo docker stop $c
   sudo docker rm -v $c
@@ -642,17 +556,24 @@ done
 EOF
 }
 
+function verify_veseventsdb() {
+  source ~/k8s_env.sh
+  for host in $1; do
+    uuid=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_user@$host sudo cat /sys/class/dmi/id/product_uuid)
+    echo "$host=$uuid"
+    result=$(curl -G "http://$ves_influxdb_host/query?pretty=true" --data-urlencode "db=veseventsdb" --data-urlencode "q=SELECT moving_average(\"$3\", 5) FROM \"$2\" WHERE (\"system\" =~ /^($uuid)$/) AND time >= now() - 5m" | jq -r '.results[0].series')
+    if [[ "$result" != "null" ]]; then
+      echo "$host load data found in influxdb"
+    else
+      echo "$host load data NOT found in influxdb"
+    fi
+  done
+}
+
 dist=$(grep --m 1 ID /etc/os-release | awk -F '=' '{print $2}' | sed 's/"//g')
 if [[ $(grep -c $HOSTNAME /etc/hosts) -eq 0 ]]; then 
   echo "$(ip route get 8.8.8.8 | awk '{print $NF; exit}') $HOSTNAME" |\
     sudo tee -a /etc/hosts
-fi
-
-# Workaround for switching collectd config file location
-if [[ "$ves_collectd" != "build" ]]; then
-  collectd_conf="/etc/collectd/collectd.conf"
-else
-  collectd_conf="/opt/collectd/etc/collectd.conf"
 fi
 
 case "$1" in
@@ -667,6 +588,9 @@ case "$1" in
     ;;
   "kafka")
     setup_kafka 
+    ;;
+  "verify")
+    verify_veseventsdb "$1" "load" "load-shortterm"
     ;;
   "clean")
     clean $2 "$3"
