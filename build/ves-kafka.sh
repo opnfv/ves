@@ -13,13 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#. What this is: Build script for the VES Collector docker image on Ubuntu.
+#. What this is: Build script for a kafka server as used by OPNFV VES.
 #.
 #. Prerequisites:
 #.   Docker hub user logged in e.g. via "sudo docker login"
 #.
 #. Usage:
-#.   bash ves-collector.sh <hub-user>
+#.   bash ves-kafka.sh <hub-user> <hub-pass>
 #.     hub-user: username for dockerhub
 #.
 #. NOTE: To allow patch testing, this script will not reclone the VES repo
@@ -27,23 +27,25 @@
 #.
 #. Status: this is a work in progress, under test.
 
+wd=$(pwd)
 echo; echo "$0 $(date): Update package repos"
 sudo apt-get update
 
-echo; echo "$0 $(date): Starting VES collector build process"
-if [[ -d /tmp/ves ]]; then rm -rf /tmp/ves; fi
-
-echo; echo "$0 $(date): Cloning VES repo to /tmp/ves"
-git clone https://gerrit.opnfv.org/gerrit/ves /tmp/ves
+echo; echo "$0 $(date): Starting VES kafka build process"
+if [[ ! -d /tmp/ves ]]; then
+  echo; echo "$0 $(date): Cloning VES repo to /tmp/ves"
+  git clone https://gerrit.opnfv.org/gerrit/ves /tmp/ves
+fi
 
 echo; echo "$0 $(date): Building the image"
-cd /tmp/ves/build/ves-collector
-sudo docker build -t ves-collector .
+cd /tmp/ves/build/ves-kafka
+sudo docker build -t ves-kafka .
 
 echo; echo "$0 $(date): Tagging the image"
-id=$(sudo docker images | grep ves-collector | awk '{print $3}')
+id=$(sudo docker images | grep ves-kafka | awk '{print $3}')
 id=$(echo $id | cut -d ' ' -f 1)
-sudo docker tag $id $1/ves-collector:latest
+sudo docker tag $id $1/ves-kafka:latest
 
-echo; echo "$0 $(date): Pushing the image to dockerhub as $1/ves-collector"
-sudo docker push $1/ves-collector
+echo; echo "$0 $(date): Pushing the image to dockerhub as $1/ves-kafka"
+sudo docker push $1/ves-kafka
+cd $wd

@@ -54,7 +54,7 @@
 #.
 #. Usage:
 #.   git clone https://gerrit.opnfv.org/gerrit/ves ~/ves
-#.   bash ~/ves/ves-setup.sh <collector|kafka|collectd|agent> [cloudify]
+#.   bash ~/ves/tools/ves-setup.sh <collector|kafka|collectd|agent> [cloudify]
 #.     collector: setup VES collector (test collector) 
 #.     kafka: setup kafka server for VES events from collect agent(s)
 #.     collectd: setup collectd with libvirt plugin, as a kafka publisher
@@ -138,45 +138,6 @@ EOF
 
   source ~/ves/tools/ves_env.sh
   echo ~/ves/tools/ves_env.sh
-}
-
-function setup_kafka() {
-  log "setup kafka server"
-  common_prereqs
-
-  log "install kafka prerequisites"
-    if [[ "$dist" == "ubuntu" ]]; then
-    sudo apt-get install -y default-jre
-    sudo apt-get install -y zookeeperd
-    sudo apt-get install -y python-pip
-  else
-    # per http://aurora.apache.org/documentation/0.12.0/installing/#centos-7
-    sudo yum install -y https://archive.cloudera.com/cdh5/one-click-install/redhat/7/x86_64/cloudera-cdh-5-0.x86_64.rpm
-    # TODO: Barometer guide: Java 1.7 is needed for Kafka
-    sudo yum install -y java-1.7.0-openjdk
-    # TODO: Barometer guide: both packages and init needed
-    sudo yum install -y zookeeper zookeeper-server
-    sudo service zookeeper-server init
-    sudo zookeeper-server start
-    sudo yum install -y python-pip
-  fi
-  sudo pip install kafka-python
-
-  setup_env
-
-  cd ~
-  ver="0.11.0.2"
-  log "get and unpack kafka_2.11-$ver.tgz"
-  wget "http://www-eu.apache.org/dist/kafka/$ver/kafka_2.11-$ver.tgz"
-  tar -xvzf kafka_2.11-$ver.tgz
-
-  log "set delete.topic.enable=true"
-  sed -i -- 's/#delete.topic.enable=true/delete.topic.enable=true/' \
-    kafka_2.11-$ver/config/server.properties
-  grep delete.topic.enable kafka_2.11-$ver/config/server.properties
-  # TODO: Barometer VES guide to clarify hostname must be in /etc/hosts
-  sudo nohup kafka_2.11-$ver/bin/kafka-server-start.sh \
-    kafka_2.11-$ver/config/server.properties >kafka.log 2>&1 &
 }
 
 function setup_collectd() {
@@ -587,7 +548,14 @@ case "$1" in
     setup_collector
     ;;
   "kafka")
-    setup_kafka 
+    log "setup kafka server"
+    source ~/k8s_env.sh
+    sudo docker run -it -d -p 2181:2181 --name zookeeper zookeeper
+    sudo docker run -it -d -p 9092:9092 --name ves-kafka \
+      -e zookeeper_host=$k8s_master_host \
+      -e zookeeper=$k8s_master \
+      -e kafka_hostname=$ves_kafka_hostname \
+      blsaws/ves-kafka:latest
     ;;
   "verify")
     verify_veseventsdb "$1" "load" "load-shortterm"

@@ -15,10 +15,15 @@
 #
 #. What this is: Build script for the VES Agent docker image on Ubuntu.
 #.
+#. Prerequisites:
+#.   Docker hub user logged in e.g. via "sudo docker login"
+#.
 #. Usage:
 #.   bash ves-agent.sh <hub-user> <hub-pass>
 #.     hub-user: username for dockerhub
-#.     hub-pass: password for dockerhub
+#.
+#. NOTE: To allow patch testing, this script will not reclone the VES repo
+#. if it exists under /tmp
 #.
 #. Status: this is a work in progress, under test.
 
@@ -28,13 +33,15 @@ sudo apt-get update
 echo; echo "$0 $(date): Starting VES agent build process"
 if [[ -d /tmp/ves ]]; then rm -rf /tmp/ves; fi
 
-echo; echo "$0 $(date): Cloning VES repo to /tmp/ves"
-git clone https://gerrit.opnfv.org/gerrit/ves /tmp/ves
+echo; echo "$0 $(date): Starting VES kafka build process"
+if [[ ! -d /tmp/ves ]]; then
+  echo; echo "$0 $(date): Cloning VES repo to /tmp/ves"
+  git clone https://gerrit.opnfv.org/gerrit/ves /tmp/ves
+fi
 
 echo; echo "$0 $(date): Building the image"
 cd /tmp/ves/build/ves-agent
 sudo docker build -t ves-agent .
-sudo docker login -u $1 -p $2
 
 echo; echo "$0 $(date): Tagging the image"
 id=$(sudo docker images | grep ves-agent | awk '{print $3}')
