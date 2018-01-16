@@ -54,16 +54,18 @@
 #.
 #. Usage:
 #.   git clone https://gerrit.opnfv.org/gerrit/ves ~/ves
-#.   bash ~/ves/tools/ves-setup.sh <collector|kafka|collectd|agent> [cloudify]
+#.   bash ~/ves/tools/ves-setup.sh <env|collector|kafka|collectd|agent> [cloudify]
+#.     env: setup VES environment script ~/ves/tools/ves_env.sh 
 #.     collector: setup VES collector (test collector) 
 #.     kafka: setup kafka server for VES events from collect agent(s)
 #.     collectd: setup collectd with libvirt plugin, as a kafka publisher
 #.     agent: setup VES agent in host or guest mode, as a kafka consumer
 #.     cloudify: (optional) use cloudify to deploy the component, as setup by
 #.       tools/cloudify/k8s-cloudify.sh in the OPNFV Models repo.
-#.   bash ~/ves/ves-setup.sh <master> <workers>
+#.   bash ~/ves/ves-setup.sh clean <master> <workers> [cloudify]
 #.     master: VES master node IP
 #.     workers: quoted, space-separated list of worker node IPs
+#.     cloudify: (optional) clean up cloudify-based deployments
 #.
 #.   See demo_deploy.sh in this repo for a recommended sequence of the above.
 #.
@@ -95,7 +97,7 @@ function common_prereqs() {
 }
 
 function setup_env() {
-  cat <<'EOF' >~/ves/tools/ves_env.sh
+  cat <<EOF >~/ves/tools/ves_env.sh
 #!/bin/bash
 ves_mode="${ves_mode:=node}"
 ves_host="${ves_host:=127.0.0.1}"
@@ -145,6 +147,8 @@ function setup_collectd() {
 
   common_prereqs
   source ~/ves/tools/ves_env.sh
+  log "VES environment as set by ves_env.sh"
+  env | grep ves
 
   log "setup VES collectd config for VES $ves_mode mode"
   mkdir ~/collectd
@@ -285,26 +289,14 @@ function setup_agent() {
   log "setup VES agent"
   source ~/k8s_env.sh
   source ~/ves/tools/ves_env.sh
+  log "VES environment as set by ves_env.sh"
+  env | grep ves
 
   log "deploy the VES agent container"
   if [[ "$1" == "cloudify" ]]; then
-    cd ~/ves/tools/cloudify
+    cp -r ~/ves/tools/cloudify/ves-agent ~/models/tools/cloudify/blueprints/.
     # Cloudify is deployed on the k8s master node
     manager_ip=$k8s_master
-    log "copy kube config from k8s master for insertion into blueprint"
-    scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      $k8s_user@$manager_ip:/home/$k8s_user/.kube/config ves-agent/kube.config
-
-    log "package the blueprint"
-    # CLI: cfy blueprints package -o /tmp/$bp $bp
-    tar ckf /tmp/blueprint.tar ves-agent
-
-    log "upload the blueprint"
-    # CLI: cfy blueprints upload -t default_tenant -b $bp /tmp/$bp.tar.gz
-    curl -s -X PUT -u admin:admin --header 'Tenant: default_tenant' \
-      --header "Content-Type: application/octet-stream" -o /tmp/json \
-      http://$manager_ip/api/v3.1/blueprints/ves-agent?application_file_name=blueprint.yaml \
-      -T /tmp/blueprint.tar
 
     inputs="{ \
       \"ves_mode\": \"$ves_mode\",
@@ -322,22 +314,7 @@ function setup_agent() {
       \"ves_kafka_hostname\": \"$ves_kafka_hostname\",
       \"ves_loglevel\": \"$ves_loglevel\"}"
 
-    log "create a deployment for the blueprint"
-    # CLI: cfy deployments create -t default_tenant -b $bp $bp
-    curl -s -X PUT -u admin:admin --header 'Tenant: default_tenant' \
-      --header "Content-Type: application/json" -o /tmp/json \
-      -d "{\"blueprint_id\": \"ves-agent\", \"inputs\": $inputs}" \
-      http://$manager_ip/api/v3.1/deployments/ves-agent
-    sleep 10
-
-    # CLI: cfy workflows list -d $bp
-
-    log "install the deployment pod and service"
-    # CLI: cfy executions start install -d $bp
-    curl -s -X POST -u admin:admin --header 'Tenant: default_tenant' \
-      --header "Content-Type: application/json" -o /tmp/json \
-      -d "{\"deployment_id\":\"ves-agent\", \"workflow_id\":\"install\"}" \
-      http://$manager_ip/api/v3.1/executions
+    bash ~/models/tools/cloudify/k8s-cloudify.sh start ves-agent ves-agent "$inputs"
   else
     sudo docker run -it -d \
       -e ves_mode=$ves_mode \
@@ -368,7 +345,9 @@ function setup_agent() {
 
 function setup_collector() {
   log "setup collector"
-  $2 $3 $4
+  source ~/ves/tools/ves_env.sh
+  log "VES environment as set by ves_env.sh"
+  env | grep ves
 
   log "install prerequistes"
   if [[ "$dist" == "ubuntu" ]]; then
@@ -376,8 +355,6 @@ function setup_collector() {
   else
     sudo yum install -y jq
   fi
-
-  setup_env
 
   if ! curl http://$ves_influxdb_host/ping ; then
     # TODO: migrate to deployment via Helm
@@ -483,12 +460,21 @@ function clean() {
   log "clean installation"
   master=$1
   workers="$2"
+  cloudify=$3
+
   source ~/k8s_env.sh
+  source ~/ves/tools/ves_env.sh
+  log "VES environment as set by ves_env.sh"
+  env | grep ves
 
   if [[ "$master" == "$workers" ]]; then
     nodes=$master
   else
     nodes="$master $workers"
+  fi
+
+  if [[ "$cloudify" == "cloudify" ]]; then
+    bash ~/models/tools/cloudify/k8s-cloudify.sh stop ves-agent ves-agent
   fi
 
   for node in $nodes; do 
@@ -509,7 +495,7 @@ EOF
   log "Remove VES containers and collectd config at master node"
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
       $k8s_user@$master <<'EOF'
-cs="ves-agent ves-collector ves-grafana ves-influxdb ves-barometer"
+cs="ves-agent ves-collector ves-grafana ves-influxdb ves-barometer ves-kafka ves-zookeeper"
 for c in $cs; do
   sudo docker stop $c
   sudo docker rm -v $c
@@ -519,6 +505,10 @@ EOF
 
 function verify_veseventsdb() {
   source ~/k8s_env.sh
+  source ~/ves/tools/ves_env.sh
+  log "VES environment as set by ves_env.sh"
+  env | grep ves
+
   for host in $1; do
     uuid=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_user@$host sudo cat /sys/class/dmi/id/product_uuid)
     echo "$host=$uuid"
@@ -537,7 +527,13 @@ if [[ $(grep -c $HOSTNAME /etc/hosts) -eq 0 ]]; then
     sudo tee -a /etc/hosts
 fi
 
+log "VES environment as input"
+env | grep ves
+
 case "$1" in
+  "env")
+    setup_env
+    ;;
   "collectd")
     setup_collectd
     ;;
@@ -550,7 +546,10 @@ case "$1" in
   "kafka")
     log "setup kafka server"
     source ~/k8s_env.sh
-    sudo docker run -it -d -p 2181:2181 --name zookeeper zookeeper
+    source ~/ves/tools/ves_env.sh
+    log "VES environment as set by ves_env.sh"
+    env | grep ves
+    sudo docker run -it -d -p 2181:2181 --name ves-zookeeper zookeeper
     sudo docker run -it -d -p 9092:9092 --name ves-kafka \
       -e zookeeper_host=$k8s_master_host \
       -e zookeeper=$k8s_master \
@@ -561,7 +560,7 @@ case "$1" in
     verify_veseventsdb "$1" "load" "load-shortterm"
     ;;
   "clean")
-    clean $2 "$3"
+    clean $2 "$3" $4
     ;;
   *)
     grep '#. ' $0

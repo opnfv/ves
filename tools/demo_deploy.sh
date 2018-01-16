@@ -65,6 +65,20 @@ cloudify=$5
 eval `ssh-agent`
 ssh-add $key
 
+ves_host=$master
+ves_mode=node
+ves_user=hello
+ves_pass=world
+ves_kafka_host=$master
+ves_kafka_hostname=$ves_kafka_hostname
+ves_influxdb_host=$ves_influxdb_host
+ves_influxdb_auth=$ves_influxdb_auth
+ves_grafana_host=$ves_grafana_host
+ves_grafana_auth=$ves_grafana_auth
+ves_loglevel=$ves_loglevel
+env | grep ves
+source ~/ves/tools/ves-setup.sh env
+
 echo; echo "$0 $(date): Setting up master node"
 ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
   $user@$master mkdir /home/$user/ves
@@ -72,36 +86,16 @@ scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
   ~/ves/tools $user@$master:/home/$user/ves
 ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
   $user@$master <<EOF
-  ves_host=$master
-  export ves_host
-  ves_mode=node
-  export ves_mode
-  ves_user=hello
-  export ves_user
-  ves_pass=world
-  export ves_pass
-  ves_kafka_host=$master
-  export ves_kafka_host
-  ves_kafka_hostname=$ves_kafka_hostname
-  export ves_kafka_hostname
-  ves_influxdb_host=$ves_influxdb_host
-  export ves_influxdb_host
-  ves_influxdb_auth=$ves_influxdb_auth
-  export ves_influxdb_auth
-  ves_grafana_host=$ves_grafana_host
-  export ves_grafana_host
-  ves_grafana_auth=$ves_grafana_auth
-  export ves_grafana_auth
-  ves_loglevel=$ves_loglevel
-  export ves_loglevel
-  env | grep ves
-  bash /home/$user/ves/tools/ves-setup.sh collector
-  bash /home/$user/ves/tools/ves-setup.sh kafka
-  bash /home/$user/ves/tools/ves-setup.sh agent $cloudify
+bash ves/tools/ves-setup.sh collector
+bash ves/tools/ves-setup.sh kafka
 EOF
 
-scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-  $user@$master:/home/$user/ves/tools/ves_env.sh ~/ves/tools/.
+if [[ "$cloudify" == "cloudify" ]]; then
+  bash ves/tools/ves-setup.sh agent $cloudify
+else
+  ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+  $user@$master bash ves/tools/ves-setup.sh agent
+fi
 
 if [[ "$master" == "$workers" ]]; then
   nodes=$master
@@ -119,17 +113,17 @@ for node in $nodes; do
   fi
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
     $user@$node <<EOF > ves-collectd-$node.log 2>&1 &
-  ves_kafka_host=$master
-  export ves_kafka_host
-  ves_kafka_port=$ves_kafka_port
-  export ves_kafka_port
-  ves_kafka_hostname=$ves_kafka_hostname
-  export ves_kafka_hostname
-  ves_mode=node
-  export ves_mode
-  bash /home/$user/ves/tools/ves-setup.sh collectd
+ves_kafka_host=$master
+export ves_kafka_host
+ves_kafka_port=$ves_kafka_port
+export ves_kafka_port
+ves_kafka_hostname=$ves_kafka_hostname
+export ves_kafka_hostname
+ves_mode=node
+export ves_mode
+bash /home/$user/ves/tools/ves-setup.sh collectd
 EOF
 done
 
-echo; echo "$0 $(date): VES Grafana dashboards are available at http://$ves_grafana_host:3000 (login as admin/admin)"
+echo; echo "$0 $(date): VES Grafana dashboards are available at http://$ves_grafana_host (login as admin/admin)"
 

@@ -1,0 +1,169 @@
+tosca_definitions_version: cloudify_dsl_1_3
+#
+# Copyright 2017 AT&T Intellectual Property, Inc
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+#  What this is: Cloudify blueprint for running the OPNFV VES Agent under
+#  kubernetes.
+
+imports:
+  - http://www.getcloudify.org/spec/cloudify/3.4/types.yaml
+  - https://raw.githubusercontent.com/cloudify-incubator/cloudify-kubernetes-plugin/1.2.1/plugin.yaml
+
+inputs:
+
+  ves_host:
+    default: 127.0.0.1
+  ves_port:
+    default: 30000
+  ves_path:
+    default: 
+  ves_topic:
+    default: 
+  ves_https:
+    default: false
+  ves_user:
+    default: 
+  ves_pass:
+    default: 
+  ves_interval:
+    default: 20
+  ves_version:
+    default: 5.1
+  ves_kafka_host:
+    default: 127.0.0.1
+  ves_kafka_hostname:
+    default: localhost
+  ves_kafka_port:
+    default: 9092
+  ves_mode:
+    default: node
+  ves_loglevel:
+    default: info
+
+  kubernetes_configuration_file_content:
+    default: kube.config
+
+  kubernetes_master_ip:
+    type: string
+    default: { get_secret: kubernetes_master_ip }
+
+  kubernetes_master_port:
+    type: string
+    default: { get_secret: kubernetes_master_port }
+
+  kubernetes_certificate_authority_data:
+    default: { get_secret: kubernetes_certificate_authority_data }
+
+  kubernetes-admin_client_certificate_data:
+    default: { get_secret: kubernetes-admin_client_certificate_data }
+
+  kubernetes-admin_client_key_data:
+    default: { get_secret: kubernetes-admin_client_key_data }
+
+  kubernetes_master_configuration:
+    default:
+      apiVersion: v1
+      kind: Config
+      preferences: {}
+      current-context: kubernetes-admin@kubernetes
+      clusters:
+      - name: kubernetes
+        cluster:
+          certificate-authority-data: { get_input: kubernetes_certificate_authority_data }
+          server: { concat: [ 'https://', { get_input: kubernetes_master_ip}, ':', { get_input: kubernetes_master_port } ] }
+      contexts:
+      - name: kubernetes-admin@kubernetes
+        context:
+          cluster: kubernetes
+          user: kubernetes-admin
+      users:
+      - name: kubernetes-admin
+        user:
+          client-certificate-data: { get_input: kubernetes-admin_client_certificate_data }
+          client-key-data:  { get_input: kubernetes-admin_client_key_data }
+
+  kubernetes_configuration_file_content:
+    description: >
+      File content of kubernetes master YAML configuration
+    default: { get_input: kubernetes_master_configuration }
+
+node_templates:
+  kubernetes_master:
+    type: cloudify.kubernetes.nodes.Master
+    properties:
+      configuration:
+        file_content: { get_input: kubernetes_configuration_file_content }
+
+  ves_agent_service:
+    type: cloudify.kubernetes.resources.Service
+    properties:
+      definition:
+        apiVersion: v1
+        metadata:
+          name: ves-agent-service
+        spec:
+          selector:
+            app: ves-agent
+    relationships:
+      - type: cloudify.kubernetes.relationships.managed_by_master
+        target: kubernetes_master
+      - type: cloudify.relationships.depends_on
+        target: ves_agent_pod
+
+  ves_agent_pod:
+    type: cloudify.kubernetes.resources.Pod
+    properties:
+      definition:
+        apiVersion: v1
+        metadata:
+          name: ves-agent-pod
+          labels:
+            app: ves-agent
+        spec:
+          containers:
+          - name: ves-agent
+            image: blsaws/ves-agent:latest
+            env:
+              - name: ves_host
+                value: { get_input: ves_host }
+              - name: ves_port
+                value: { get_input: ves_port }
+              - name: ves_path
+                value: { get_input: ves_path }
+              - name: ves_topic
+                value: { get_input: ves_topic }
+              - name: ves_https
+                value: { get_input: ves_https }
+              - name: ves_user
+                value: { get_input: ves_user }
+              - name: ves_pass
+                value: { get_input: ves_pass }
+              - name: ves_interval
+                value: { get_input: ves_interval }
+              - name: ves_version
+                value: { get_input: ves_version }
+              - name: ves_kafka_host
+                value: { get_input: ves_kafka_host }
+              - name: ves_kafka_hostname
+                value: { get_input: ves_kafka_hostname }
+              - name: ves_kafka_port
+                value: { get_input: ves_kafka_port }
+              - name: ves_mode
+                value: { get_input: ves_mode }
+              - name: ves_loglevel
+                value: { get_input: ves_loglevel }
+    relationships:
+      - type: cloudify.kubernetes.relationships.managed_by_master
+        target: kubernetes_master
