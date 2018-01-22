@@ -35,9 +35,17 @@
 #. - env variables set prior to running this script, as per ves-setup.sh
 #.     ves_kafka_hostname: hostname of the node where the kafka server runs
 #. - optional env varibles set prior to running this script, as per ves-setup.sh
-#.     ves_influxdb_host: ip:port of the influxdb service
+#.     ves_host: ip of the VES collector service
+#.     ves_zookeeper_host: ip of the zookeeper service
+#.     ves_zookeeper_port: port of the zookeeper service
+#.     ves_kafka_host: ip of the kafka service
+#.     ves_kafka_port: port of the kafka service
+#.     ves_port: port of the VES collector service
+#.     ves_influxdb_host: ip of the influxdb service
+#.     ves_influxdb_port: port of the influxdb service
 #.     ves_influxdb_auth: authentication for the influxdb service
-#.     ves_grafana_host: ip:port of the grafana service
+#.     ves_grafana_host: ip of the grafana service
+#.     ves_grafana_port: port of the grafana service
 #.     ves_grafana_auth: authentication for the grafana service
 #.     ves_loglevel: loglevel for VES Agent and Collector (ERROR|DEBUG)
 #.
@@ -49,81 +57,104 @@
 #. Usage: on the admin server
 #. $ git clone https://gerrit.opnfv.org/gerrit/ves ~/ves
 #. $ cd ~/ves/tools
-#. $ bash demo_deploy.sh <key> <user> <master> <workers> [cloudify]
-#.   <key>: SSH key enabling password-less SSH to nodes
+#. $ bash demo_deploy.sh <user> <master> [cloudify]
 #.   <user>: username on node with password-less SSH authorized
-#.   <master>: master node where core components will be installed
-#.   <workers>: list of worker nodes where collectd will be installed
+#.   <master>: hostname of k8s master node
 #.   cloudify: flag indicating to deploy VES core services via Cloudify
 
-key=$1
-user=$2
-master=$3
-workers="$4"
-cloudify=$5
+trap 'fail' ERR
 
-eval `ssh-agent`
-ssh-add $key
+function fail() {
+  log $1
+  exit 1
+}
 
-ves_host=$master
-ves_mode=node
-ves_user=hello
-ves_pass=world
-ves_kafka_host=$master
-ves_kafka_hostname=$ves_kafka_hostname
-ves_influxdb_host=$ves_influxdb_host
-ves_influxdb_auth=$ves_influxdb_auth
-ves_grafana_host=$ves_grafana_host
-ves_grafana_auth=$ves_grafana_auth
-ves_loglevel=$ves_loglevel
-env | grep ves
-source ~/ves/tools/ves-setup.sh env
+function log() {
+  f=$(caller 0 | awk '{print $2}')
+  l=$(caller 0 | awk '{print $1}')
+  echo; echo "$f:$l ($(date)) $1"
+}
 
-echo; echo "$0 $(date): Setting up master node"
-ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-  $user@$master mkdir /home/$user/ves
-scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-  ~/ves/tools $user@$master:/home/$user/ves
-ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-  $user@$master <<EOF
-bash ves/tools/ves-setup.sh collector
-bash ves/tools/ves-setup.sh kafka
-EOF
+function run() {
+  log "$1"
+  start=$((`date +%s`/60))
+  $1
+  step_end "$1"
+}
 
-if [[ "$cloudify" == "cloudify" ]]; then
-  bash ves/tools/ves-setup.sh agent $cloudify
-else
+function step_end() {
+  end=$((`date +%s`/60))
+  runtime=$((end-start))
+  log "step \"$1\" duration = $runtime minutes"
+}
+
+function run_master() {
+  log "$1"
+  start=$((`date +%s`/60))
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-  $user@$master bash ves/tools/ves-setup.sh agent
-fi
+    $k8s_user@$k8s_master "$1"
+  step_end "$1"
+}
 
-if [[ "$master" == "$workers" ]]; then
-  nodes=$master
-else
-  nodes="$master $workers"
-fi
+function deploy() {
+  if [[ -f ~/ves/tools/ves_env.sh ]]; then rm ~/ves/tools/ves_env.sh; fi
+  ves_host=$ves_host
+  ves_port=$ves_port
+  ves_mode=node
+  ves_user=hello
+  ves_pass=world
+  ves_kafka_host=$ves_kafka_host
+  ves_kafka_hostname=$ves_kafka_hostname
+  ves_zookeeper_host=$ves_zookeeper_host
+  ves_zookeeper_port=$ves_zookeeper_port
+  ves_influxdb_host=$ves_influxdb_host
+  ves_influxdb_port=$ves_influxdb_port
+  ves_influxdb_auth=$ves_influxdb_auth
+  ves_grafana_host=$ves_grafana_host
+  ves_grafana_port=$ves_grafana_port
+  ves_grafana_auth=$ves_grafana_auth
+  ves_loglevel=$ves_loglevel
+  source ~/ves/tools/ves-setup.sh env
+  env | grep ves_ >~/ves/tools/ves_env.sh
+  for var in $vars; do echo "export $var" | tee -a ~/ves/tools/ves_env.sh; done
 
-for node in $nodes; do
-  echo; echo "$0 $(date): Setting up collectd at $node"
-  if [[ "$node" != "$master" ]]; then
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      $user@$node mkdir /home/$user/ves
-    scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ~/ves/tools $user@$node:/home/$user/ves
+  log "Setting up master node"
+  run_master "mkdir /home/$user/ves"
+  scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+    ~/ves/tools $user@$master:/home/$user/ves
+  run "bash ves/tools/ves-setup.sh collector $cloudify"
+  run "bash ves/tools/ves-setup.sh kafka $cloudify"
+  run "bash ves/tools/ves-setup.sh agent $cloudify"
+
+  if [[ "$k8s_master" == "$k8s_workers" ]]; then
+    nodes=$k8s_master
+  else
+    nodes="$k8s_master $k8s_workers"
   fi
-  ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-    $user@$node <<EOF > ves-collectd-$node.log 2>&1 &
-ves_kafka_host=$master
-export ves_kafka_host
-ves_kafka_port=$ves_kafka_port
-export ves_kafka_port
-ves_kafka_hostname=$ves_kafka_hostname
-export ves_kafka_hostname
-ves_mode=node
-export ves_mode
-bash /home/$user/ves/tools/ves-setup.sh collectd
+
+  for node in $nodes; do
+    log "Setting up collectd at $node"
+    if [[ "$node" != "$k8s_master" ]]; then
+      ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+        $user@$node mkdir /home/$user/ves
+      scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+       ~/ves/tools $user@$node:/home/$user/ves
+    fi
+    run "bash ves/tools/ves-setup.sh collectd"
 EOF
-done
+  done
 
-echo; echo "$0 $(date): VES Grafana dashboards are available at http://$ves_grafana_host (login as admin/admin)"
+  source ~/ves/tools/ves_env.sh
+  log "VES Grafana dashboards are available at http://$ves_grafana_host:$ves_grafana_port (login as admin/admin)"
+}
 
+deploy_start=$((`date +%s`/60))
+user=$1
+master=$2
+cloudify=$3
+source ~/k8s_env_$master.sh
+log "k8s environment as input"
+env | grep k8s
+eval `ssh-agent`
+ssh-add $k8s_key
+deploy

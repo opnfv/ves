@@ -19,7 +19,7 @@
 #.   Docker hub user logged in e.g. via "sudo docker login"
 #.
 #. Usage:
-#.   bash ves-kafka.sh <hub-user> <hub-pass>
+#.   bash ves-kafka.sh <hub-user>
 #.     hub-user: username for dockerhub
 #.
 #. NOTE: To allow patch testing, this script will not reclone the VES repo

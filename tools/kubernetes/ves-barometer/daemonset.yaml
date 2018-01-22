@@ -1,0 +1,62 @@
+#
+# Copyright 2017 AT&T Intellectual Property, Inc
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+#  What this is: Kuberbetes chart for the OPNFV Barometer collectd agent
+#  running as a daemonset (one each kluster node) under kubernetes.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ves-barometer
+  namespace: default
+  labels:
+    k8s-app: ves-barometer
+spec:
+  selector:
+    matchLabels:
+      name: ves-barometer
+  template:
+    metadata:
+      labels:
+        name: ves-barometer
+    spec:
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      containers:
+      - name: ves-barometer
+        image: blsaws/ves-barometer:latest
+        env:
+        - name: ves_mode
+          value: <ves_mode>
+        - name: ves_kafka_hostname
+          value: <ves_kafka_hostname>
+        - name: ves_kafka_port
+          value: "<ves_kafka_port>"
+        volumeMounts:
+        - name: varrun
+          mountPath: /var/run
+        - name: tmp
+          mountPath: /tmp
+          readOnly: true
+        securityContext:
+          privileged: true
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: varrun
+        hostPath:
+          path: /var/run
+      - name: tmp
+        hostPath:
+          path: /tmp

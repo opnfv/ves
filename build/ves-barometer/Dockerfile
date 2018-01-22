@@ -1,4 +1,4 @@
-# Copyright 2017-2018 AT&T Intellectual Property, Inc
+# Copyright 2018 AT&T Intellectual Property, Inc
 #  
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,26 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# What this is: A Dockerfile for building an OPFNV VES Collector container image.
+# What this is: A Dockerfile for building an OPFNV VES Agent container image.
 #
 # Status: this is a work in progress, under test.
 #
+FROM centos:7
+RUN yum update -y && yum install -y which sudo git
+ENV DOCKER y
+ENV repos_dir /src
+ENV openstack_plugins /src/barometer/src/collectd-openstack-plugins
+RUN git config --global http.sslVerify false
 
-FROM ubuntu:xenial
+WORKDIR ${repos_dir}
+RUN git clone https://gerrit.opnfv.org/gerrit/barometer
+WORKDIR ${repos_dir}/barometer/systems
+RUN sh ./build_base_machine.sh
 
-MAINTAINER Bryan Sullivan
+RUN useradd -ms /bin/bash collectd_exec
+RUN echo "collectd_exec ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
-RUN apt-get update && apt-get install -y apt-utils
-RUN apt-get -y upgrade
-RUN apt-get update && apt-get install -y git python-pip python-jsonschema curl
-RUN pip install requests
+WORKDIR ${openstack_plugins}
+RUN make
 
-RUN mkdir /opt/ves
-
-# Clone VES Collector
-RUN git clone https://github.com/att/evel-test-collector.git /opt/ves/evel-test-collector
-
-COPY monitor.py /opt/ves/evel-test-collector/code/collector/monitor.py
-COPY Dashboard.json /opt/ves/Dashboard.json
 COPY start.sh /opt/ves/start.sh
 ENTRYPOINT ["/bin/bash", "/opt/ves/start.sh"]

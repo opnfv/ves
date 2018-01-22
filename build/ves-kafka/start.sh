@@ -16,14 +16,14 @@
 #. What this is: Startup script for a kafka server as used by the OPNFV VES
 #. framework.
 
-echo "$zookeeper $zookeeper_host" >>/etc/hosts
+echo "$zookeeper_host $zookeeper_hostname" >>/etc/hosts
 cat /etc/hosts
 cd /opt/ves
 
-sed -i "s/localhost:2181/$zookeeper_host:2181/" \
+sed -i "s/localhost:2181/$zookeeper_hostname:$zookeeper_port/" \
   kafka_2.11-0.11.0.2/config/server.properties
 grep 2181 kafka_2.11-0.11.0.2/config/server.properties
-sed -i "s~#advertised.listeners=PLAINTEXT://your.host.name:9092~advertised.listeners=PLAINTEXT://$kafka_hostname:9092~" \
+sed -i "s~#advertised.listeners=PLAINTEXT://your.host.name:9092~advertised.listeners=PLAINTEXT://$kafka_hostname:$kafka_port~" \
   kafka_2.11-0.11.0.2/config/server.properties
 grep advertised.listeners kafka_2.11-0.11.0.2/config/server.properties
 

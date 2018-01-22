@@ -31,10 +31,10 @@ echo; echo "$0 $(date): Update package repos"
 sudo apt-get update
 
 echo; echo "$0 $(date): Starting VES collector build process"
-if [[ -d /tmp/ves ]]; then rm -rf /tmp/ves; fi
-
-echo; echo "$0 $(date): Cloning VES repo to /tmp/ves"
-git clone https://gerrit.opnfv.org/gerrit/ves /tmp/ves
+if [[ ! -d /tmp/ves ]]; then
+  echo; echo "$0 $(date): Cloning VES repo to /tmp/ves"
+  git clone https://gerrit.opnfv.org/gerrit/ves /tmp/ves
+fi
 
 echo; echo "$0 $(date): Building the image"
 cd /tmp/ves/build/ves-collector

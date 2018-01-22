@@ -21,26 +21,19 @@ FROM ubuntu:xenial
 
 MAINTAINER Bryan Sullivan
 
-RUN apt-get update
-RUN apt-get install -y apt-utils
-RUN apt-get -y upgrade
-RUN apt-get install -y git
-# Required for kafka
-RUN apt-get install -y default-jre
-RUN apt-get install -y zookeeperd
-RUN apt-get install -y python-pip
-RUN pip install kafka-python
-# Required for building collectd
-RUN apt-get install -y pkg-config
-
 RUN mkdir /opt/ves
 
+RUN apt-get update && apt-get install -y apt-utils
+RUN apt-get -y upgrade
+# Required for kafka: default-jre zookeeperd python-pip kafka-python
+# Required for building librdkafka:  git build-essential libpthread-stubs0-dev libssl-dev libsasl2-dev liblz4-dev
+# Required for building collectd: pkg-config
+RUN apt-get update && apt-get install -y default-jre \
+zookeeperd python-pip pkg-config \
+git build-essential libpthread-stubs0-dev libssl-dev libsasl2-dev liblz4-dev
+RUN pip install kafka-python
+
 # Build Kafka client
-RUN apt-get install -y build-essential
-RUN apt-get install -y libpthread-stubs0-dev
-RUN apt-get install -y libssl-dev
-RUN apt-get install -y libsasl2-dev
-RUN apt-get install -y liblz4-dev
 RUN /bin/bash -c 'git clone --branch v0.9.5 \
 https://github.com/edenhill/librdkafka.git /opt/ves/librdkafka; \
 cd /opt/ves/librdkafka; ./configure --prefix=/usr; \
@@ -50,10 +43,6 @@ make; make install'
 RUN pip install pyaml
 
 RUN git clone https://gerrit.opnfv.org/gerrit/barometer /opt/ves/barometer
-# Test patch
-RUN /bin/bash -c 'cd /opt/ves/barometer; \
-git fetch https://gerrit.opnfv.org/gerrit/barometer \
-refs/changes/27/47427/1 && git checkout FETCH_HEAD'
 
 COPY start.sh /opt/ves/start.sh
 ENTRYPOINT ["/bin/bash", "/opt/ves/start.sh"]

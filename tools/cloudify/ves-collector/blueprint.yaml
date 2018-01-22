@@ -1,6 +1,6 @@
 tosca_definitions_version: cloudify_dsl_1_3
 #
-# Copyright 2017 AT&T Intellectual Property, Inc
+# Copyright 2018 AT&T Intellectual Property, Inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@ tosca_definitions_version: cloudify_dsl_1_3
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#  What this is: Cloudify blueprint for running the OPNFV VES Agent under
+#  What this is: Cloudify blueprint for running the OPNFV VES Collector under
 #  kubernetes.
 
 imports:
@@ -26,7 +26,7 @@ inputs:
   ves_host:
     default: 127.0.0.1
   ves_port:
-    default: 30000
+    default: 3001
   ves_path:
     default: 
   ves_topic:
@@ -41,21 +41,22 @@ inputs:
     default: 20
   ves_version:
     default: 5.1
-  ves_kafka_host:
-    default: 127.0.0.1
-  ves_kafka_hostname:
-    default: localhost
-  ves_kafka_port:
-    default: 9092
-  ves_mode:
-    default: node
   ves_loglevel:
     default: info
-
+  ves_influxdb_host:
+    default: 127.0.0.1
+  ves_influxdb_port:
+    default: 8086
+  ves_grafana_host:
+    default: 127.0.0.1
+  ves_grafana_port:
+    default: 3000
+  ves_grafana_auth:
+    default: admin:admin
   spec_port:
-    default: 80
+    default: 3001
   container_port:
-    default: 80
+    default: 3001
 
   kubernetes_configuration_file_content:
     default: kube.config
@@ -111,37 +112,39 @@ node_templates:
       configuration:
         file_content: { get_input: kubernetes_configuration_file_content }
 
-  ves_agent_service:
+  ves_collector_service:
     type: cloudify.kubernetes.resources.Service
     properties:
       definition:
         apiVersion: v1
         metadata:
-          name: ves-agent-service
+          name: ves-collector-service
         spec:
           ports:
           - port: { get_input: spec_port }
           selector:
-            app: ves-agent
+            app: ves-collector
     relationships:
       - type: cloudify.kubernetes.relationships.managed_by_master
         target: kubernetes_master
       - type: cloudify.relationships.depends_on
-        target: ves_agent_pod
+        target: ves_collector_pod
 
-  ves_agent_pod:
+  ves_collector_pod:
     type: cloudify.kubernetes.resources.Pod
     properties:
       definition:
         apiVersion: v1
         metadata:
-          name: ves-agent-pod
+          name: ves-collector-pod
           labels:
-            app: ves-agent
+            app: ves-collector
         spec:
+          nodeSelector:
+            role: worker
           containers:
-          - name: ves-agent
-            image: blsaws/ves-agent:latest
+          - name: ves-collector
+            image: blsaws/ves-collector:latest
             env:
               - name: ves_host
                 value: { get_input: ves_host }
@@ -161,16 +164,18 @@ node_templates:
                 value: { get_input: ves_interval }
               - name: ves_version
                 value: { get_input: ves_version }
-              - name: ves_kafka_host
-                value: { get_input: ves_kafka_host }
-              - name: ves_kafka_hostname
-                value: { get_input: ves_kafka_hostname }
-              - name: ves_kafka_port
-                value: { get_input: ves_kafka_port }
-              - name: ves_mode
-                value: { get_input: ves_mode }
               - name: ves_loglevel
                 value: { get_input: ves_loglevel }
+              - name: ves_influxdb_host
+                value: { get_input: ves_influxdb_host }
+              - name: ves_influxdb_port
+                value: { get_input: ves_influxdb_port }
+              - name: ves_grafana_host
+                value: { get_input: ves_grafana_host }
+              - name: ves_grafana_port
+                value: { get_input: ves_grafana_port }
+              - name: ves_grafana_auth
+                value: { get_input: ves_grafana_auth }
             ports:
             - containerPort: { get_input: container_port }
     relationships:

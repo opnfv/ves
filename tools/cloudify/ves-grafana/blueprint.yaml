@@ -1,6 +1,6 @@
 tosca_definitions_version: cloudify_dsl_1_3
 #
-# Copyright 2017 AT&T Intellectual Property, Inc
+# Copyright 2018 AT&T Intellectual Property, Inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@ tosca_definitions_version: cloudify_dsl_1_3
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#  What this is: Cloudify blueprint for running the OPNFV VES Agent under
-#  kubernetes.
+#  What this is: Cloudify blueprint for running a grafana service for OPNFV VES
+#  under kubernetes.
 
 imports:
   - http://www.getcloudify.org/spec/cloudify/3.4/types.yaml
@@ -23,39 +23,11 @@ imports:
 
 inputs:
 
-  ves_host:
-    default: 127.0.0.1
-  ves_port:
-    default: 30000
-  ves_path:
-    default: 
-  ves_topic:
-    default: 
-  ves_https:
-    default: false
-  ves_user:
-    default: 
-  ves_pass:
-    default: 
-  ves_interval:
-    default: 20
-  ves_version:
-    default: 5.1
-  ves_kafka_host:
-    default: 127.0.0.1
-  ves_kafka_hostname:
-    default: localhost
-  ves_kafka_port:
-    default: 9092
-  ves_mode:
-    default: node
-  ves_loglevel:
-    default: info
-
   spec_port:
-    default: 80
+    default: 3000
+
   container_port:
-    default: 80
+    default: 3000
 
   kubernetes_configuration_file_content:
     default: kube.config
@@ -111,66 +83,39 @@ node_templates:
       configuration:
         file_content: { get_input: kubernetes_configuration_file_content }
 
-  ves_agent_service:
+  ves_grafana_service:
     type: cloudify.kubernetes.resources.Service
     properties:
       definition:
         apiVersion: v1
         metadata:
-          name: ves-agent-service
+          name: ves-grafana-service
         spec:
+          type: NodePort
           ports:
           - port: { get_input: spec_port }
           selector:
-            app: ves-agent
+            app: ves-grafana
     relationships:
       - type: cloudify.kubernetes.relationships.managed_by_master
         target: kubernetes_master
       - type: cloudify.relationships.depends_on
-        target: ves_agent_pod
+        target: ves_grafana_pod
 
-  ves_agent_pod:
+  ves_grafana_pod:
     type: cloudify.kubernetes.resources.Pod
     properties:
       definition:
         apiVersion: v1
         metadata:
-          name: ves-agent-pod
+          name: ves-grafana-pod
           labels:
-            app: ves-agent
+            app: ves-grafana
         spec:
           containers:
-          - name: ves-agent
-            image: blsaws/ves-agent:latest
+          - name: ves-grafana
+            image: grafana/grafana
             env:
-              - name: ves_host
-                value: { get_input: ves_host }
-              - name: ves_port
-                value: { get_input: ves_port }
-              - name: ves_path
-                value: { get_input: ves_path }
-              - name: ves_topic
-                value: { get_input: ves_topic }
-              - name: ves_https
-                value: { get_input: ves_https }
-              - name: ves_user
-                value: { get_input: ves_user }
-              - name: ves_pass
-                value: { get_input: ves_pass }
-              - name: ves_interval
-                value: { get_input: ves_interval }
-              - name: ves_version
-                value: { get_input: ves_version }
-              - name: ves_kafka_host
-                value: { get_input: ves_kafka_host }
-              - name: ves_kafka_hostname
-                value: { get_input: ves_kafka_hostname }
-              - name: ves_kafka_port
-                value: { get_input: ves_kafka_port }
-              - name: ves_mode
-                value: { get_input: ves_mode }
-              - name: ves_loglevel
-                value: { get_input: ves_loglevel }
             ports:
             - containerPort: { get_input: container_port }
     relationships:
