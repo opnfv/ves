@@ -13,9 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#  What this is: Kuberbetes chart for the OPNFV Barometer collectd agent
-#  running as a daemonset (one each kluster node) under kubernetes.
-apiVersion: apps/v1
+# What this is: Kuberbetes chart for the OPNFV Barometer collectd agent
+# running as a daemonset (one each kluster node) under kubernetes.
+#
+# Notes:
+# - apiVersion: extensions/v1beta1 is required for Ubuntu (apps/v1 failed with
+#   "error: unable to recognize... no matches for apps/, Kind=DaemonSet"
+apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
   name: ves-barometer

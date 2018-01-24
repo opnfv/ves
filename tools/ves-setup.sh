@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2017 AT&T Intellectual Property, Inc
+# Copyright 2017-2018 AT&T Intellectual Property, Inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,8 +15,8 @@
 #
 #. What this is: Setup script for the VES monitoring framework.
 #. With this script VES support can be installed in one or more hosts, with:
-#. - a dedicated or shared Kafka server for collection of events from collectd
-#. - VES collectd agents running in host or guest mode
+#. - a dedicated or shared Kafka server for collection of events from barometer
+#. - VES barometer agents running in host or guest mode
 #. - VES monitor (test collector)
 #. - Influxdb service (if an existing service is not passed as an option)
 #. - Grafana service (if an existing service is not passed as an option)
@@ -26,14 +26,14 @@
 #.    pre-installed VES collector e.g. from the ONAP project.
 #.  - Install Kafka server on one of the hosts, or use a pre-installed server
 #.    accessible from the agent hosts.
-#.  - Install collectd on each host.
+#.  - Install barometer on each host.
 #.  - Install the VES agent on one of the hosts.
 #.
 #. Prerequisites:
 #. - Ubuntu Xenial (Centos support to be provided)
 #. - passwordless sudo setup for user running this script
 #. - shell environment variables setup as below (for non-default setting)
-#.   ves_mode: install mode (node|guest) for VES collectd plugin (default: node)
+#.   ves_mode: install mode (node|guest) for VES barometer plugin (default: node)
 #.   ves_host: VES collector IP or hostname (default: 127.0.0.1)
 #.   ves_port: VES collector port (default: 3001)
 #.   ves_path: REST path optionalRoutingPath element (default: empty)
@@ -41,7 +41,7 @@
 #.   ves_https: use HTTPS instead of HTTP (default: false)
 #.   ves_user: username for basic auth with collector (default: empty)
 #.   ves_pass: password for basic auth with collector (default: empty)
-#.   ves_interval: frequency in sec for collectd data reports (default: 20)
+#.   ves_interval: frequency in sec for barometer data reports (default: 20)
 #.   ves_version: VES API version (default: 5.1)
 #.   ves_kafka_host: kafka host IP (default: 127.0.0.1)
 #.   ves_kafka_hostname: kafka host hostname (default: localhost)
@@ -54,20 +54,28 @@
 #.
 #. Usage:
 #.   git clone https://gerrit.opnfv.org/gerrit/ves ~/ves
-#.   bash ~/ves/tools/ves-setup.sh <env|collector|kafka|collectd|agent> [cloudify]
+#.   bash ~/ves/tools/ves-setup.sh <what> [cloudify]
+#.     what: one of env|influxdb|grafana|collector|zookeeper|kafka|agent|barometer
 #.     env: setup VES environment script ~/ves/tools/ves_env.sh 
+#.     influxdb: setup influxdb as a docker container on k8s_master node 
+#.     grafana: setup grafana as a docker container on k8s_master node 
 #.     collector: setup VES collector (test collector) 
+#.     zookeeper: setup zookeeper server for kafka configuration
 #.     kafka: setup kafka server for VES events from collect agent(s)
-#.     collectd: setup collectd with libvirt plugin, as a kafka publisher
 #.     agent: setup VES agent in host or guest mode, as a kafka consumer
+#.     barometer: setup barometer with libvirt plugin, as a kafka publisher
 #.     cloudify: (optional) use cloudify to deploy the component, as setup by
 #.       tools/cloudify/k8s-cloudify.sh in the OPNFV Models repo.
-#.   bash ~/ves/ves-setup.sh clean <master> <workers> [cloudify]
-#.     master: VES master node IP
-#.     workers: quoted, space-separated list of worker node IPs
-#.     cloudify: (optional) clean up cloudify-based deployments
 #.
-#.   See demo_deploy.sh in this repo for a recommended sequence of the above.
+#.   The recommended sequence for setting up the components is:
+#.     influxdb: prerequisite for grafana datasource setup
+#.     grafana:  prerequisite for setup of datasource and dashboards
+#.     collector: creates veseventsdb in influxdb, and grafana 
+#.       datasource/dashboards, then starts listening for VES event reports
+#.     zookeeper: prerequisite for kafka
+#.     kafka: prerequisite for agent and barometer
+#.     agent: listens for collectd topic events over kafka, for reporting to collector
+#.     barometer: monitors resources and reports via collectd topic in kafka
 #.
 #. Status: this is a work in progress, under test.
 
@@ -101,7 +109,7 @@ function setup_env() {
   cat <<EOF >~/ves/tools/ves_env.sh
 #!/bin/bash
 ves_mode="${ves_mode:=node}"
-ves_host="${ves_host:=127.0.0.1}"
+ves_host="${ves_host:=ves-collector-service.default.svc.cluster.local}"
 ves_hostname="${ves_hostname:=ves-collector-service.default.svc.cluster.local}"
 ves_port="${ves_port:=3001}"
 ves_path="${ves_path:=}"
@@ -111,17 +119,18 @@ ves_user="${ves_user:=}"
 ves_pass="${ves_pass:=}"
 ves_interval="${ves_interval:=20}"
 ves_version="${ves_version:=5.1}"
+ves_zookeeper_host="${ves_zookeeper_host:=ves-zookeeper-service.default.svc.cluster.local}"
 ves_zookeeper_hostname="${ves_zookeeper_hostname:=ves-zookeeper-service.default.svc.cluster.local}"
-ves_zookeeper_host="${ves_zookeeper_host:=127.0.0.1}"
+ves_zookeeper_host="${ves_zookeeper_host:=ves-zookeeper-service.default.svc.cluster.local}"
 ves_zookeeper_port="${ves_zookeeper_port:=2181}"
-ves_kafka_host="${ves_kafka_host:=127.0.0.1}"
+ves_kafka_host="${ves_kafka_host:=ves-kafka-service.default.svc.cluster.local}"
 ves_kafka_hostname="${ves_kafka_hostname:=ves-kafka-service.default.svc.cluster.local}"
 ves_kafka_port="${ves_kafka_port:=9092}"
-ves_influxdb_host="${ves_influxdb_host:=127.0.0.1}"
+ves_influxdb_host="${ves_influxdb_host:=ves-influxdb-service.default.svc.cluster.local}"
 ves_influxdb_hostname="${ves_influxdb_hostname:=ves-influxdb-service.default.svc.cluster.local}"
 ves_influxdb_port="${ves_influxdb_port:=8086}"
 ves_influxdb_auth="${ves_influxdb_auth:=}"
-ves_grafana_host="${ves_grafana_host:=127.0.0.1}"
+ves_grafana_host="${ves_grafana_host:=ves-grafana-service.default.svc.cluster.local}"
 ves_grafana_hostname="${ves_grafana_hostname:=ves-grafana-service.default.svc.cluster.local}"
 ves_grafana_port="${ves_grafana_port:=3000}"
 ves_grafana_auth="${ves_grafana_auth:=admin:admin}"
@@ -204,8 +213,8 @@ EOF
   fi
 }
 
-function setup_collectd() {
-  log "setup collectd"
+function setup_barometer() {
+  log "setup barometer"
 #  if [[ $(grep -c $ves_kafka_hostname /etc/hosts) -eq 0 ]]; then
 #    log "add to /etc/hosts: $ves_kafka_host $ves_kafka_hostname"
 #    echo "$ves_kafka_host $ves_kafka_hostname" | sudo tee -a /etc/hosts
@@ -284,9 +293,8 @@ EOF
   # ~/kafka_2.11-0.11.0.2/bin/kafka-console-consumer.sh --zookeeper localhost:2181 --topic collectd
 }
 
-function setup_collector() {
-  log "setup collector"
-
+function setup_influxdb() {
+  log "setup influxdb"
   log "install prerequistes"
   if [[ "$dist" == "ubuntu" ]]; then
     sudo apt-get install -y jq
@@ -313,7 +321,10 @@ done
 echo; echo "InfluxDB container state is $status"
 EOF
   fi
+}
 
+function setup_grafana() {
+  log "setup grafana"
   log "checking for grafana at http://$ves_grafana_host:$ves_grafana_port"
   if ! curl http://$ves_grafana_host:$ves_grafana_port ; then
     log "install Grafana container on k8s master"
@@ -333,8 +344,10 @@ done
 echo; echo "Grafana container state is $status"
 EOF
   fi
+}
 
-  log "setup collector container"
+function setup_collector() {
+  log "setup collector"
   if [[ "$1" == "cloudify" ]]; then
     cp -r ~/ves/tools/cloudify/ves-collector ~/models/tools/cloudify/blueprints/.
     inputs="{ \
@@ -390,70 +403,6 @@ EOF
   # sudo docker exec -it ves-collector /bin/bash
 }
 
-function clean() {
-  log "clean installation"
-  master=$1
-  workers="$2"
-  cloudify=$3
-
-  log "VES datasources and dashboards at grafana server, if needed"
-  curl -X DELETE \
-    http://$ves_grafana_auth@$ves_grafana_host:$ves_grafana_port/api/datasources/name/VESEvents
-  curl -X DELETE \
-    http://$ves_grafana_auth@$ves_grafana_host:$ves_grafana_port/api/dashboards/db/ves-demo
-
-  if [[ "$cloudify" == "cloudify" ]]; then
-    log "stop cloudify-managed services"
-    bash ~/models/tools/cloudify/k8s-cloudify.sh stop ves-agent ves-agent
-    bash ~/models/tools/cloudify/k8s-cloudify.sh stop ves-kafka ves-kafka
-    bash ~/models/tools/cloudify/k8s-cloudify.sh stop ves-zookeeper ves-zookeeper
-    bash ~/models/tools/cloudify/k8s-cloudify.sh stop ves-collector ves-collector
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      $k8s_user@$k8s_master <<'EOF'
-cs="ves-grafana ves-influxdb"
-for c in $cs; do
-  sudo docker stop $c
-  sudo docker rm -v $c
-done
-kubectl delete daemonset --namespace default ves-barometer
-EOF
-    log "workaround: force cleanup of k8s pods if still present"
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      $k8s_user@$k8s_master <<'EOF'
-cs="ves-agent-pod ves-collector-pod ves-grafana-pod ves-influxdb-pod ves-kafka-pod ves-zookeeper-pod"
-for c in $cs; do
-  kubectl delete pods --namespace default $c
-done
-EOF
-  else
-    log "Remove VES containers and collectd config at master node"
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      $k8s_user@$k8s_master <<'EOF'
-cs="ves-agent ves-collector ves-grafana ves-influxdb ves-kafka ves-zookeeper"
-for c in $cs; do
-  sudo docker stop $c
-  sudo docker rm -v $c
-done
-EOF
-  fi
-
-  if [[ "$master" == "$workers" ]]; then
-    nodes=$master
-  else
-    nodes="$master $workers"
-  fi
-  for node in $nodes; do 
-    log "remove ves-barometer container and config for VES at node $node"
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      $k8s_user@$node <<EOF
-sudo docker stop ves-barometer
-sudo docker rm -v ves-barometer
-sudo rm -rf /home/$k8s_user/ves
-sudo rm -rf /home/$k8s_user/collectd
-EOF
-  done
-}
-
 function verify_veseventsdb() {
   log "VES environment as set by ves_env.sh"
   env | grep ves
@@ -476,7 +425,7 @@ if [[ $(grep -c $HOSTNAME /etc/hosts) -eq 0 ]]; then
     sudo tee -a /etc/hosts
 fi
 
-source ~/k8s_env.sh
+source ~/k8s_env_$k8s_master_hostname.sh
 if [[ -f ~/ves/tools/ves_env.sh ]]; then
   source ~/ves/tools/ves_env.sh
 fi
@@ -489,11 +438,17 @@ case "$1" in
   "env")
     setup_env
     ;;
-  "collectd")
-    setup_collectd
+  "barometer")
+    setup_barometer
     ;;
   "agent")
     setup_agent $2
+    ;;
+  "influxdb")
+    setup_influxdb
+    ;;
+  "grafana")
+    setup_grafana
     ;;
   "collector")
     setup_collector $2
@@ -503,9 +458,6 @@ case "$1" in
     ;;
   "verify")
     verify_veseventsdb "$1" load load-shortterm
-    ;;
-  "clean")
-    clean $2 "$3" $4
     ;;
   *)
     grep '#. ' $0

@@ -115,13 +115,13 @@ function deploy() {
   ves_grafana_auth=$ves_grafana_auth
   ves_loglevel=$ves_loglevel
   source ~/ves/tools/ves-setup.sh env
-  env | grep ves_ >~/ves/tools/ves_env.sh
-  for var in $vars; do echo "export $var" | tee -a ~/ves/tools/ves_env.sh; done
 
   log "Setting up master node"
   run_master "mkdir /home/$user/ves"
   scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
     ~/ves/tools $user@$master:/home/$user/ves
+  run "bash ves/tools/ves-setup.sh influxdb"
+  run "bash ves/tools/ves-setup.sh grafana"
   run "bash ves/tools/ves-setup.sh collector $cloudify"
   run "bash ves/tools/ves-setup.sh kafka $cloudify"
   run "bash ves/tools/ves-setup.sh agent $cloudify"
@@ -133,14 +133,14 @@ function deploy() {
   fi
 
   for node in $nodes; do
-    log "Setting up collectd at $node"
+    log "Setting up barometer at $node"
     if [[ "$node" != "$k8s_master" ]]; then
       ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
         $user@$node mkdir /home/$user/ves
       scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
        ~/ves/tools $user@$node:/home/$user/ves
     fi
-    run "bash ves/tools/ves-setup.sh collectd"
+    run "bash ves/tools/ves-setup.sh barometer"
 EOF
   done
 
@@ -152,7 +152,7 @@ deploy_start=$((`date +%s`/60))
 user=$1
 master=$2
 cloudify=$3
-source ~/k8s_env_$master.sh
+source ~/k8s_env_$k8s_master_hostname.sh
 log "k8s environment as input"
 env | grep k8s
 eval `ssh-agent`
