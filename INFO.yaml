@@ -1,0 +1,52 @@
+---
+project: 'VNF Event Stream (VES)'
+project_creation_date: ''
+project_category: ''
+lifecycle_state: 'Incubation'
+project_lead: &opnfv_ves_ptl
+    name: 'Bryan Sullivan'
+    email: 'bryan.sullivan@att.com'
+    id: 'blsaws'
+    company: 'att.com'
+    timezone: 'Unknown'
+primary_contact: *opnfv_ves_ptl
+issue_tracking:
+    type: 'jira'
+    url: 'https://jira.opnfv.org/projects/VES'
+    key: 'VES'
+mailing_list:
+    type: 'mailman2'
+    url: 'opnfv-tech-discuss@lists.opnfv.org'
+    tag: '[ves]'
+realtime_discussion:
+    type: irc
+    server: 'freenode.net'
+    channel: '#opnfv-ves'
+meetings:
+    - type: 'gotomeeting+irc'
+      agenda:  # eg: 'https://wiki.opnfv.org/display/'
+      url:  # eg: 'https://global.gotomeeting.com/join/819733085'
+      server: 'freenode.net'
+      channel: '#opnfv-meeting'
+      repeats: 'weekly'
+      time:  # eg: '16:00 UTC'
+repositories:
+    - 'ves'
+committers:
+    - <<: *opnfv_ves_ptl
+    - name: 'Alok Gupta'
+      email: 'ag1367@att.com'
+      company: 'att.com'
+      id: 'alok411'
+    - name: 'Yuanzhen Li'
+      email: 'li.yuanzhen@zte.com.cn'
+      company: 'zte.com.cn'
+      id: 'LeeYZ'
+    - name: 'Aimee Ukasick'
+      email: 'aimeeu@research.att.com'
+      company: 'research.att.com'
+      id: 'aimeeu'
+tsc:
+    # yamllint disable rule:line-length
+    approval: 'https//wiki.opnfv.org/wiki/tsc#february_16_2016'
+    # yamllint enable rule:line-length
