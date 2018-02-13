@@ -188,7 +188,7 @@ if [[ $(grep -c $HOSTNAME /etc/hosts) -eq 0 ]]; then
     sudo tee -a /etc/hosts
 fi
 
-source ~/k8s_env_$k8s_master_hostname.sh
+source ~/k8s_env.sh
 if [[ -f ~/ves/tools/ves_env.sh ]]; then
   source ~/ves/tools/ves_env.sh
 fi

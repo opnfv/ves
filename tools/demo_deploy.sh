@@ -152,7 +152,7 @@ deploy_start=$((`date +%s`/60))
 user=$1
 master=$2
 cloudify=$3
-source ~/k8s_env_$k8s_master_hostname.sh
+source ~/k8s_env.sh
 log "k8s environment as input"
 env | grep k8s
 eval `ssh-agent`
