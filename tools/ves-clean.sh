@@ -137,6 +137,7 @@ function clean_collector() {
 function clean_barometer() {
   log "clean ves-barometer"
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+  $k8s_user@$node <<EOF
 kubectl delete daemonset --namespace default ves-barometer
 EOF
   force_k8s_clean ves-barometer
